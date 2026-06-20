@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "demo": "tsx demo.ts"
+    "demo": "tsx demo.ts",
+    "seed": "tsx seed.ts",
+    "seed:dry": "tsx seed.ts --dry-run"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
