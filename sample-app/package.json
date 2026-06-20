@@ -1,0 +1,21 @@
+{
+  "name": "trace-ai-sample",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "demo": "tsx demo.ts",
+    "seed": "tsx seed.ts",
+    "seed:dry": "tsx seed.ts --dry-run"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@trace-ai/sdk": "file:../sdk",
+    "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}
