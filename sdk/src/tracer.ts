@@ -1,6 +1,5 @@
-import type Anthropic from '@anthropic-ai/sdk';
-import { TraceConfig, TracePayload } from './types';
-import { wrapAnthropic } from './wrappers/anthropic';
+import type { TraceConfig, TracePayload } from './types';
+import { wrapAnthropic, type TracedAnthropic, type AnthropicClientLike } from './wrappers/anthropic';
 
 function uuid(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -33,7 +32,7 @@ export class Tracer {
     }).catch((err: unknown) => console.warn('[trace-ai] ingest failed:', err));
   }
 
-  wrapAnthropic(client: InstanceType<typeof Anthropic>): InstanceType<typeof Anthropic> {
+  wrapAnthropic(client: AnthropicClientLike): TracedAnthropic {
     return wrapAnthropic(client, this);
   }
 }

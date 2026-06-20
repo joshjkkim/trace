@@ -1,2 +1,4 @@
 export { Tracer } from './tracer';
-export type { TraceConfig, TracePayload } from './types';
+export { getCost } from './cost';
+export type { TraceConfig, TracePayload, TraceOptions } from './types';
+export type { TracedAnthropic, TracedMessageParams } from './wrappers/anthropic';

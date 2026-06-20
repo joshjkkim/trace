@@ -1,3 +1,7 @@
+export interface TraceOptions {
+  stepName?: string;
+}
+
 export interface TraceConfig {
   apiKey: string;
   runId?: string;
@@ -12,10 +16,9 @@ export interface TracePayload {
   prompt: string;
   input_tokens: number;
   output_tokens: number;
-  reasoning_tokens?: number;
   total_tokens: number;
   latency_ms: number;
-  cost_usd?: number;
+  cost_usd: number;
   context_limit?: number;
   context_utilization?: number;
   status: 'success' | 'error';

@@ -20,7 +20,8 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/index.ts
 var index_exports = {};
 __export(index_exports, {
-  Tracer: () => Tracer
+  Tracer: () => Tracer,
+  getCost: () => getCost
 });
 module.exports = __toCommonJS(index_exports);
 
@@ -48,67 +49,58 @@ function getContextWindow(model) {
 
 // src/wrappers/anthropic.ts
 function wrapAnthropic(client, tracer) {
-  return new Proxy(client, {
-    get(target, prop, receiver) {
-      if (prop !== "messages") return Reflect.get(target, prop, receiver);
-      return new Proxy(target.messages, {
-        get(msgTarget, msgProp, msgReceiver) {
-          if (msgProp !== "create") return Reflect.get(msgTarget, msgProp, msgReceiver);
-          return async function tracedCreate(params) {
-            const { _trace, ...cleanParams } = params;
-            const stepName = _trace?.stepName ?? "anthropic.messages.create";
-            const start = Date.now();
-            try {
-              const response = await msgTarget.create.call(
-                msgTarget,
-                cleanParams
-              );
-              const latency_ms = Date.now() - start;
-              const input_tokens = response.usage?.input_tokens ?? 0;
-              const output_tokens = response.usage?.output_tokens ?? 0;
-              const reasoning_tokens = response.usage?.thinking_tokens;
-              const total_tokens = input_tokens + output_tokens + (reasoning_tokens ?? 0);
-              const model = response.model ?? cleanParams.model;
-              const contextWindow = getContextWindow(model);
-              tracer.ingest({
-                run_id: tracer.runId,
-                step_name: stepName,
-                model,
-                prompt: JSON.stringify(cleanParams.messages),
-                input_tokens,
-                output_tokens,
-                reasoning_tokens,
-                total_tokens,
-                latency_ms,
-                cost_usd: getCost(model, input_tokens, output_tokens),
-                context_limit: contextWindow,
-                context_utilization: contextWindow ? total_tokens / contextWindow : void 0,
-                status: "success"
-              });
-              return response;
-            } catch (err) {
-              const latency_ms = Date.now() - start;
-              const message = err instanceof Error ? err.message : String(err);
-              tracer.ingest({
-                run_id: tracer.runId,
-                step_name: stepName,
-                model: cleanParams.model,
-                prompt: JSON.stringify(cleanParams.messages),
-                input_tokens: 0,
-                output_tokens: 0,
-                total_tokens: 0,
-                latency_ms,
-                cost_usd: 0,
-                status: "error",
-                error: message
-              });
-              throw err;
-            }
-          };
+  return {
+    messages: {
+      async create(params) {
+        const { _trace, ...cleanParams } = params;
+        const stepName = _trace?.stepName ?? "anthropic.messages.create";
+        const start = Date.now();
+        try {
+          const response = await client.messages.create(
+            cleanParams
+          );
+          const latency_ms = Date.now() - start;
+          const input_tokens = response.usage?.input_tokens ?? 0;
+          const output_tokens = response.usage?.output_tokens ?? 0;
+          const total_tokens = input_tokens + output_tokens;
+          const model = response.model ?? cleanParams.model;
+          const contextWindow = getContextWindow(model);
+          tracer.ingest({
+            run_id: tracer.runId,
+            step_name: stepName,
+            model,
+            prompt: JSON.stringify({ system: cleanParams.system, messages: cleanParams.messages }),
+            input_tokens,
+            output_tokens,
+            total_tokens,
+            latency_ms,
+            cost_usd: getCost(model, input_tokens, output_tokens),
+            context_limit: contextWindow,
+            context_utilization: contextWindow ? total_tokens / contextWindow : void 0,
+            status: "success"
+          });
+          return response;
+        } catch (err) {
+          const latency_ms = Date.now() - start;
+          const message = err instanceof Error ? err.message : String(err);
+          tracer.ingest({
+            run_id: tracer.runId,
+            step_name: stepName,
+            model: cleanParams.model,
+            prompt: JSON.stringify({ system: cleanParams.system, messages: cleanParams.messages }),
+            input_tokens: 0,
+            output_tokens: 0,
+            total_tokens: 0,
+            latency_ms,
+            cost_usd: 0,
+            status: "error",
+            error: message
+          });
+          throw err;
         }
-      });
+      }
     }
-  });
+  };
 }
 
 // src/tracer.ts
@@ -141,6 +133,7 @@ var Tracer = class {
 };
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  Tracer
+  Tracer,
+  getCost
 });
 //# sourceMappingURL=index.js.map
