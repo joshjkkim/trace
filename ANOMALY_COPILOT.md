@@ -42,6 +42,30 @@ Per-call feature vector: `input_tokens, output_tokens, reasoning_tokens, total_t
 - **Multivariate ML (differentiator):** scheduled `IsolationForest` (`contamination ~0.05`) over standardized per-run feature aggregates to catch "weird runs" no single metric flags.
 - **Cold-start handling:** require min N (~20) samples per baseline before flagging. This is why we **seed historical traces first**, then live-inject during the demo so baselines are warm.
 
+### Ruleset (per `IngestPayload`, `sdk/trace_sdk/models.py`)
+
+Every rule below reads fields straight off `IngestPayload`. Baselines are keyed `(step_name, model)` unless noted; cumulative/multivariate rules key on `run_id`.
+
+| Rule | Field(s) | Condition | Severity |
+|---|---|---|---|
+| Latency spike | `latency_ms` | modified z-score vs baseline, `\|0.6745·(x − median)/MAD\| > 3.5` | warn |
+| Input token spike | `input_tokens` | same z-score test | warn |
+| Output token spike | `output_tokens` | same z-score test | warn |
+| Reasoning blowup | `reasoning_tokens` | same z-score test (skip when `None`, i.e. model has no extended thinking) | warn |
+| Total token spike | `total_tokens` | same z-score test (redundant w/ input+output but catches joint drift) | warn |
+| Cost spike (per-call) | `cost_usd` | same z-score test | warn |
+| Cost spike (per-run) | `cost_usd` + `run_id` | cumulative `sum(cost_usd)` per `run_id` vs historical run-cost distribution | warn/critical |
+| Context overflow warning | `context_utilization` | `> 0.8` | warn |
+| Context overflow critical | `context_utilization` | `> 0.95` | critical |
+| Context limit missing | `context_limit` | `None` while `total_tokens` set — data-quality gap, not a model anomaly | info |
+| Hard failure | `status`, `error` | `status == "error"` — always flagged, no baseline needed | critical |
+| Unexpected finish reason | `finish_reason` | not in `{end_turn, stop, tool_use}` (e.g. `max_tokens` truncation) | warn |
+| Prompt bloat | `len(full_prompt)` (derived) | z-score vs baseline — leading indicator for token spikes, used for root-causing | info |
+| Cold-start guard | `n` in `baselines` | suppress all rules above until `n ≥ 20` for that `(step_name, model, metric)` key | — |
+| Multivariate outlier (stretch) | `input_tokens, output_tokens, reasoning_tokens, total_tokens, latency_ms, cost_usd, context_utilization` | standardize, IsolationForest over per-run aggregates, `contamination ≈ 0.05` | warn |
+
+Open items: `provider` isn't part of any baseline key yet (fine while it's always `"anthropic"`, but should join the key once multi-provider lands); `prompt`/`system_prompt`/`full_prompt`/`code` are payload for the diagnosis LLM, not detector inputs — only `len(full_prompt)` feeds a rule.
+
 ## Data model (Supabase)
 
 - `traces` — id, run_id, step_name, model, prompt, input/output/reasoning/total_tokens, latency_ms, cost_usd, context_limit, context_utilization, status, error, created_at
