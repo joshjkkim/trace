@@ -82,8 +82,40 @@ def _record_usage(project_id: int | None, run_id: str, input_tokens: int, output
             "output_tokens": output_tokens,
             "cost_usd": cost,
         }).execute()
+        if project_id:
+            _check_budget(project_id, cost)
     except Exception as exc:
         print(f"[analyze] usage record failed: {exc}")
+
+
+def _check_budget(project_id: int, just_spent: float) -> None:
+    try:
+        db = get_client()
+        proj = db.table("PROJECTS").select("name,monthly_budget_usd,slack_webhook_url").eq("id", project_id).single().execute()
+        if not proj.data:
+            return
+        budget = proj.data.get("monthly_budget_usd")
+        webhook = proj.data.get("slack_webhook_url")
+        if not budget or not webhook:
+            return
+
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+        res = db.table("USAGE").select("cost_usd").eq("project_id", project_id).gte("created_at", month_start).execute()
+        total = sum(r["cost_usd"] for r in (res.data or []))
+
+        if total >= budget:
+            from services.slack_service import send_budget_alert
+            send_budget_alert(
+                webhook_url=webhook,
+                project_name=proj.data.get("name", "unknown"),
+                project_id=project_id,
+                spent_usd=total,
+                budget_usd=budget,
+            )
+    except Exception as exc:
+        print(f"[analyze] budget check failed: {exc}")
 
 
 @router.post("/run/{run_id}")

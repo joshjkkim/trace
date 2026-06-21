@@ -8,8 +8,10 @@ DASHBOARD_BASE = "http://localhost:3000"
 # Per-project cooldown so a burst of errors doesn't spam the channel
 _rate_cooldown:    dict[int, float] = {}
 _anomaly_cooldown: dict[int, float] = {}
-RATE_COOLDOWN_SEC    = 300   # 5 minutes between error-rate pings
-ANOMALY_COOLDOWN_SEC = 60    # 1 minute between anomaly pings per project
+_budget_cooldown:  dict[int, float] = {}
+RATE_COOLDOWN_SEC    = 300    # 5 minutes between error-rate pings
+ANOMALY_COOLDOWN_SEC = 60     # 1 minute between anomaly pings per project
+BUDGET_COOLDOWN_SEC  = 3600   # 1 hour between budget alerts
 RATE_THRESHOLD       = 0.25  # 25% error rate triggers the alert
 RATE_WINDOW          = 20    # look at last N calls
 
@@ -151,6 +153,42 @@ def send_anomaly_alert(
     ]
     return _post(webhook_url, {
         "text": f"{emoji} {label} in {project_name}: {step_name} scored {int(total_score)}pts",
+        "blocks": blocks,
+    })
+
+
+def send_budget_alert(
+    webhook_url: str,
+    project_name: str,
+    project_id: int,
+    spent_usd: float,
+    budget_usd: float,
+) -> bool:
+    now = time.time()
+    if now - _budget_cooldown.get(project_id, 0) < BUDGET_COOLDOWN_SEC:
+        return False
+    _budget_cooldown[project_id] = now
+
+    pct = round(spent_usd / budget_usd * 100, 1)
+    blocks = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"💸 *Monthly budget exceeded — {project_name}*\n${spent_usd:.4f} spent of ${budget_usd:.2f} budget ({pct}%)",
+            },
+        },
+        {
+            "type": "actions",
+            "elements": [{
+                "type": "button",
+                "text": {"type": "plain_text", "text": "View Usage →"},
+                "url": f"{DASHBOARD_BASE}/dashboard/{project_id}",
+            }],
+        },
+    ]
+    return _post(webhook_url, {
+        "text": f"💸 Budget exceeded for {project_name}: ${spent_usd:.4f} / ${budget_usd:.2f}",
         "blocks": blocks,
     })
 

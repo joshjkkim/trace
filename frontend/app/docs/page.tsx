@@ -7,6 +7,7 @@ const NAV = [
   { id: 'tracer',        label: 'new Tracer()' },
   { id: 'wrap',          label: 'wrapAnthropic()' },
   { id: 'run',           label: 'run()' },
+  { id: 'streaming',     label: 'Streaming' },
   { id: 'steps',         label: 'Naming steps' },
   { id: 'manual',        label: 'Manual ingest' },
   { id: 'anomalies',     label: 'Anomaly detection' },
@@ -235,6 +236,28 @@ const res = await anthropic.messages.create({
 }`}</Code>
           <P>Each call to <code className="text-indigo-300 text-sm font-mono">anthropic.run()</code> creates a completely independent run. Parallel requests each get their own <code className="text-indigo-300 text-sm font-mono">run_id</code> — they never interfere.</P>
 
+          {/* Streaming */}
+          <H2 id="streaming">Streaming</H2>
+          <P>
+            <code className="text-indigo-300 text-sm font-mono">messages.stream()</code> is fully supported on both the wrapped client and <code className="text-indigo-300 text-sm font-mono">TracedRun</code>. Tokens and latency are captured after the stream ends — zero impact on streaming latency.
+          </P>
+          <Code>{`const stream = run.messages.stream({
+  model: 'claude-haiku-4-5-20251001',
+  max_tokens: 512,
+  messages: [{ role: 'user', content: 'Tell me a story.' }],
+  _trace: { stepName: 'story' },
+})
+
+for await (const event of stream) {
+  if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+    process.stdout.write(event.delta.text)
+  }
+}
+// trace is ingested automatically once the stream completes`}</Code>
+          <Callout type="info">
+            The stream is returned immediately and passed through unchanged. Ingestion happens via <code className="font-mono text-xs">finalMessage()</code> as a fire-and-forget side effect — your streaming latency is unaffected.
+          </Callout>
+
           {/* Naming steps */}
           <H2 id="steps">Naming steps</H2>
           <P>Add <code className="text-indigo-300 text-sm font-mono">_trace: {'{ stepName: \'...\' }'}</code> to any <code className="text-indigo-300 text-sm font-mono">messages.create()</code> call to give the step a human-readable name. Without it, steps are auto-named <code className="text-indigo-300 text-sm font-mono">step_1</code>, <code className="text-indigo-300 text-sm font-mono">step_2</code>, etc.</P>
@@ -310,7 +333,7 @@ await run.messages.create({
               { layer: 'L1', color: 'text-red-400 border-red-900/50 bg-red-950/20', title: 'Hard failures', desc: 'status_success=false, error present, token accounting mismatch (total ≠ input+output), zero output with non-empty error.' },
               { layer: 'L2', color: 'text-orange-400 border-orange-900/40 bg-orange-950/10', title: 'Format violations', desc: 'Prompt asked for JSON but output isn\'t valid JSON. Prompt asked for yes/no but output is prose. Enum step returned a non-enumerated value.' },
               { layer: 'L3', color: 'text-yellow-400 border-yellow-900/40 bg-yellow-950/10', title: 'Shape fingerprinting', desc: 'Output shape doesn\'t match what the prompt asked for. Unbalanced brackets. Named JSON keys missing from the output. Word count violations.' },
-              { layer: 'L4', color: 'text-blue-400 border-blue-900/40 bg-blue-950/10', title: 'Numeric anomalies', desc: 'Latency spikes, cost outliers, output/input token ratio drift, classify steps emitting too many tokens, stall patterns.' },
+              { layer: 'L4', color: 'text-blue-400 border-blue-900/40 bg-blue-950/10', title: 'Numeric anomalies', desc: 'Latency spikes, cost outliers, token ratio drift, stall patterns. Thresholds adapt to your project\'s baseline using p95 of recent calls — a project with consistently fast calls gets a tighter limit than one with variable latency.' },
             ].map((l) => (
               <div key={l.layer} className={`rounded-xl border px-4 py-4 ${l.color}`}>
                 <div className="flex items-center gap-3 mb-1">
@@ -321,7 +344,7 @@ await run.messages.create({
               </div>
             ))}
           </div>
-          <P>Scores accumulate across layers. A single L1 hit (100 pts) is immediately critical. L4 conditions score 10–25 pts each and require several to fire before crossing the 100-point threshold.</P>
+          <P>Scores accumulate across layers. A single L1 hit (100 pts) is immediately critical. L4 conditions score 10–25 pts each and require several to fire before crossing the threshold. L4 limits are dynamic — once a project has 30+ calls, trace.ai computes the p95 of recent latency, token usage, and cost and uses that as the threshold instead of static defaults. You can also override them manually in <strong className="text-gray-200">Settings → L4 anomaly thresholds</strong>.</P>
 
           {/* AI analysis */}
           <H2 id="analysis">AI analysis</H2>

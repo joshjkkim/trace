@@ -24,6 +24,7 @@ interface Project {
   threshold_latency_ms?: number | null;
   threshold_tokens?: number | null;
   threshold_cost?: number | null;
+  monthly_budget_usd?: number | null;
 }
 
 interface Call {
@@ -55,7 +56,7 @@ interface Run {
   createdAt: string;
 }
 
-type Tab = 'overview' | 'logs' | 'runs' | 'anomalies' | 'settings';
+type Tab = 'overview' | 'logs' | 'runs' | 'anomalies' | 'usage' | 'settings';
 
 interface AnomalyRow {
   id: number;
@@ -295,6 +296,7 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
     { id: 'logs',      label: 'Logs' },
     { id: 'runs',      label: `Runs${runs.length ? ` (${runs.length})` : ''}` },
     { id: 'anomalies', label: `Anomalies${criticalCount ? ` (${criticalCount} critical)` : anomalyRuns.length ? ` (${anomalyRuns.length})` : ''}` },
+    { id: 'usage',     label: 'Usage' },
     { id: 'settings',  label: 'Settings' },
   ];
 
@@ -409,6 +411,7 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
         {tab === 'anomalies' && <AnomaliesTab runs={anomalyRuns} registry={conditionRegistry} />}
 
         {/* ── Settings ── */}
+        {tab === 'usage'    && <UsageTab project={project} />}
         {tab === 'settings' && <SettingsTab project={project} />}
 
       </div>
@@ -1065,6 +1068,109 @@ interface ThresholdData {
   };
 }
 
+function UsageTab({ project }: { project: Project }) {
+  const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
+  const [data, setData] = useState<{
+    month_cost_usd: number;
+    total_cost_usd: number;
+    budget_usd: number | null;
+    budget_pct: number | null;
+    by_feature: Record<string, number>;
+    recent: Array<{ id: number; feature: string; model: string; input_tokens: number; output_tokens: number; cost_usd: number; created_at: string; run_id: string }>;
+  } | null>(null);
+
+  useEffect(() => {
+    fetch(`${BACKEND}/projects/${project.id}/usage`)
+      .then(r => r.json())
+      .then(setData)
+      .catch(() => {});
+  }, [project.id, BACKEND]);
+
+  if (!data) return <div className="text-sm text-gray-600 py-8">Loading…</div>;
+
+  const budgetPct = data.budget_pct ?? 0;
+  const overBudget = data.budget_usd != null && data.month_cost_usd >= data.budget_usd;
+
+  return (
+    <div className="space-y-6">
+      {/* Summary cards */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-gray-900 border border-gray-800 rounded-xl px-5 py-4">
+          <div className="text-2xl font-semibold text-gray-100">${data.month_cost_usd.toFixed(4)}</div>
+          <div className="text-xs text-gray-500 mt-1">This month</div>
+        </div>
+        <div className="bg-gray-900 border border-gray-800 rounded-xl px-5 py-4">
+          <div className="text-2xl font-semibold text-gray-100">${data.total_cost_usd.toFixed(4)}</div>
+          <div className="text-xs text-gray-500 mt-1">All time</div>
+        </div>
+        <div className="bg-gray-900 border border-gray-800 rounded-xl px-5 py-4">
+          {data.budget_usd != null ? (
+            <>
+              <div className={`text-2xl font-semibold ${overBudget ? 'text-red-400' : 'text-gray-100'}`}>
+                {budgetPct.toFixed(1)}%
+              </div>
+              <div className="text-xs text-gray-500 mt-1">of ${data.budget_usd.toFixed(2)} budget</div>
+              <div className="mt-2 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${overBudget ? 'bg-red-500' : budgetPct > 80 ? 'bg-yellow-500' : 'bg-emerald-500'}`}
+                  style={{ width: `${Math.min(budgetPct, 100)}%` }}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="text-2xl font-semibold text-gray-600">—</div>
+              <div className="text-xs text-gray-600 mt-1">No budget set</div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* By feature */}
+      {Object.keys(data.by_feature).length > 0 && (
+        <div className="border border-gray-800 rounded-xl p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-gray-300">This month by feature</h3>
+          {Object.entries(data.by_feature).map(([feature, cost]) => (
+            <div key={feature} className="flex items-center justify-between text-sm">
+              <span className="text-gray-400 font-mono text-xs">{feature}</span>
+              <span className="text-gray-200">${cost.toFixed(4)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Recent entries */}
+      {data.recent.length > 0 ? (
+        <div className="border border-gray-800 rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-800">
+            <h3 className="text-sm font-semibold text-gray-300">Recent usage</h3>
+          </div>
+          <div className="divide-y divide-gray-800">
+            {data.recent.map(r => (
+              <div key={r.id} className="px-4 py-3 flex items-center justify-between text-sm">
+                <div className="min-w-0">
+                  <span className="text-gray-400 font-mono text-xs">{r.feature}</span>
+                  <span className="text-gray-600 mx-2">·</span>
+                  <span className="text-gray-600 text-xs">{r.model}</span>
+                  <div className="text-gray-600 text-xs mt-0.5">{r.input_tokens + r.output_tokens} tokens · run {r.run_id.slice(0, 8)}…</div>
+                </div>
+                <div className="text-right shrink-0 ml-4">
+                  <div className="text-gray-200">${r.cost_usd.toFixed(6)}</div>
+                  <div className="text-gray-600 text-xs">{new Date(r.created_at).toLocaleDateString()}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="text-center py-16 text-gray-600 text-sm">
+          No usage recorded yet — click <strong className="text-gray-500">✦ Analyze Run</strong> on any run to generate a report.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SettingsTab({ project }: { project: Project }) {
   const [url, setUrl] = useState(project.slack_webhook_url ?? '');
   const [alertOnError, setAlertOnError] = useState(project.alert_on_error ?? true);
@@ -1079,6 +1185,7 @@ function SettingsTab({ project }: { project: Project }) {
   const [slackAnomalyLevel, setSlackAnomalyLevel] = useState<'critical' | 'warning' | 'none'>(
     (project.slack_anomaly_level as 'critical' | 'warning' | 'none') ?? 'critical'
   );
+  const [budget, setBudget] = useState(project.monthly_budget_usd?.toString() ?? '');
   const [thresholdMode, setThresholdMode] = useState<'dynamic' | 'manual'>(
     (project.threshold_mode as 'dynamic' | 'manual') ?? 'dynamic'
   );
@@ -1117,6 +1224,7 @@ function SettingsTab({ project }: { project: Project }) {
           threshold_latency_ms: thresholdMode === 'manual' && manualLatency ? parseFloat(manualLatency) : null,
           threshold_tokens: thresholdMode === 'manual' && manualTokens ? parseFloat(manualTokens) : null,
           threshold_cost: thresholdMode === 'manual' && manualCost ? parseFloat(manualCost) : null,
+          monthly_budget_usd: budget ? parseFloat(budget) : null,
         }),
       });
       if (!res.ok) throw new Error(await res.text());
@@ -1332,7 +1440,7 @@ function SettingsTab({ project }: { project: Project }) {
             <div className="space-y-2">
               <p className="text-xs text-gray-600">
                 {baseline.mode === 'dynamic'
-                  ? `Learned from ${baseline.calls_used} calls (mean + 2σ). Updates automatically.`
+                  ? `Learned from ${baseline.calls_used} calls (p95). Updates automatically.`
                   : `Static defaults active — ${baseline.calls_needed} more calls needed to adapt.`}
               </p>
               {[
@@ -1373,6 +1481,25 @@ function SettingsTab({ project }: { project: Project }) {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Budget */}
+      <div className="border border-gray-800 rounded-xl p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-gray-300">Monthly budget</h3>
+        <p className="text-xs text-gray-600">Get a Slack alert when AI analysis spend crosses this amount in the current calendar month.</p>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-400">$</span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="e.g. 10.00"
+            value={budget}
+            onChange={e => setBudget(e.target.value)}
+            className="w-36 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-gray-100 font-mono placeholder-gray-600 focus:outline-none focus:border-gray-500"
+          />
+          <span className="text-xs text-gray-600">USD / month — leave blank to disable</span>
+        </div>
       </div>
 
       {/* Save — covers everything above */}

@@ -30,6 +30,7 @@ class ProjectResponse(BaseModel):
     threshold_latency_ms: Optional[float] = None
     threshold_tokens: Optional[float] = None
     threshold_cost: Optional[float] = None
+    monthly_budget_usd: Optional[float] = None
 
 
 class WebhookUpdate(BaseModel):
@@ -44,6 +45,7 @@ class WebhookUpdate(BaseModel):
     threshold_latency_ms: Optional[float] = None
     threshold_tokens: Optional[float] = None
     threshold_cost: Optional[float] = None
+    monthly_budget_usd: Optional[float] = None
 
 
 class ProjectWithCallsResponse(ProjectResponse):
@@ -196,6 +198,7 @@ def update_webhook(project_id: int, body: WebhookUpdate) -> ProjectResponse:
         updates["threshold_latency_ms"] = body.threshold_latency_ms
         updates["threshold_tokens"] = body.threshold_tokens
         updates["threshold_cost"] = body.threshold_cost
+        updates["monthly_budget_usd"] = body.monthly_budget_usd
         res = client.table("PROJECTS").update(updates).eq("id", project_id).execute()
         if not res.data:
             raise HTTPException(status_code=404, detail="Project not found")
@@ -220,6 +223,41 @@ def test_webhook(project_id: int) -> dict:
         return {"ok": True}
     except HTTPException:
         raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/{project_id}/usage")
+def get_usage(project_id: int) -> dict:
+    """Return usage/billing summary for a project."""
+    try:
+        from datetime import datetime, timezone
+        db = get_client()
+        now = datetime.now(timezone.utc)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+
+        res = db.table("USAGE").select("*").eq("project_id", project_id).order("created_at", desc=True).execute()
+        rows = res.data or []
+
+        month_rows = [r for r in rows if r["created_at"] >= month_start]
+        month_cost = sum(r["cost_usd"] for r in month_rows)
+        total_cost = sum(r["cost_usd"] for r in rows)
+
+        by_feature: dict[str, float] = {}
+        for r in month_rows:
+            by_feature[r["feature"]] = by_feature.get(r["feature"], 0) + r["cost_usd"]
+
+        proj = db.table("PROJECTS").select("monthly_budget_usd").eq("id", project_id).single().execute()
+        budget = proj.data.get("monthly_budget_usd") if proj.data else None
+
+        return {
+            "month_cost_usd": round(month_cost, 6),
+            "total_cost_usd": round(total_cost, 6),
+            "budget_usd": budget,
+            "budget_pct": round(month_cost / budget * 100, 1) if budget else None,
+            "by_feature": {k: round(v, 6) for k, v in by_feature.items()},
+            "recent": rows[:20],
+        }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
