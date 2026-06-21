@@ -23,6 +23,7 @@ class CallResponse(BaseModel):
     output_code: str | None = None
     run_id: str | None = None
     project_id: int | None = None
+    step_index: int | None = None
 
 
 @router.get("/run/{run_id}", response_model=List[CallResponse])
@@ -50,7 +51,7 @@ def get_calls_by_project_id(project_id: int) -> List[CallResponse]:
     """Get all calls from a specific project_id."""
     try:
         client = get_client()
-        res = client.table("CALLS").select("*").eq("project_id", project_id).execute()
+        res = client.table("CALLS").select("*").eq("project_id", project_id).order("created_at", desc=True).execute()
         
         if not res.data:
             raise HTTPException(
