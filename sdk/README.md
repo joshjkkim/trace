@@ -1,6 +1,6 @@
 # @trace-ai/sdk
 
-TypeScript SDK that wraps Anthropic's `messages.create`, captures tokens/latency/cost, and fire-and-forgets a trace payload to the trace.ai backend.
+Observability for AI workflows. Wraps Anthropic's `messages.create` and `messages.stream` to automatically capture tokens, latency, cost, and anomalies — then sends traces to your [trace.ai](https://trace.ai) dashboard.
 
 ## Install
 
@@ -21,9 +21,53 @@ const response = await anthropic.messages.create({
   model: 'claude-haiku-4-5-20251001',
   max_tokens: 256,
   messages: [{ role: 'user', content: 'Hello!' }],
-  _trace: { stepName: 'my-step' },  // optional label
+  _trace: { stepName: 'my-step' },
 });
-// response is the normal Anthropic Message — nothing changes for your code
+// response is the normal Anthropic Message — your code is unchanged
+```
+
+## Multi-step runs
+
+Group multiple LLM calls into a single traced run so you can see the full pipeline in the dashboard:
+
+```typescript
+const run = anthropic.run();
+
+const step1 = await run.messages.create({
+  model: 'claude-haiku-4-5-20251001',
+  max_tokens: 16,
+  messages: [{ role: 'user', content: 'Classify this: "refund request"' }],
+  _trace: { stepName: 'classify' },
+});
+
+const step2 = await run.messages.create({
+  model: 'claude-haiku-4-5-20251001',
+  max_tokens: 256,
+  messages: [{ role: 'user', content: `Reply to a ${text(step1)} inquiry.` }],
+  _trace: { stepName: 'generate-reply' },
+});
+
+console.log(run.runId); // same run_id groups both steps in the dashboard
+```
+
+## Streaming
+
+`messages.stream` is fully supported — tokens and latency are captured after the stream ends with zero impact on streaming latency:
+
+```typescript
+const stream = run.messages.stream({
+  model: 'claude-haiku-4-5-20251001',
+  max_tokens: 512,
+  messages: [{ role: 'user', content: 'Tell me a story.' }],
+  _trace: { stepName: 'story' },
+});
+
+for await (const event of stream) {
+  if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+    process.stdout.write(event.delta.text);
+  }
+}
+// trace is ingested automatically once stream completes
 ```
 
 ## API
@@ -33,61 +77,45 @@ const response = await anthropic.messages.create({
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `apiKey` | `string` | yes | Your trace.ai project API key |
-| `runId` | `string` | | Groups steps into one workflow run. Auto-UUID if omitted |
-| `projectId` | `number` | | Associate traces with a project |
-| `apiUrl` | `string` | | Override ingest URL — local dev only |
+| `apiUrl` | `string` | | Override ingest URL — defaults to trace.ai's servers |
+| `runId` | `string` | | Custom run ID — auto-generated UUID if omitted |
 
 ### `tracer.wrapAnthropic(client)`
 
-Returns a wrapped client with the same `messages.create` signature plus `_trace`.
+Returns a wrapped client with `.messages.create()`, `.messages.stream()`, and `.run()`.
+
+### `anthropic.run()`
+
+Creates a `TracedRun` — a fresh `run_id` that groups all steps called on it. Each call to `run()` resets the step index to 0.
 
 ### `_trace` option
 
 ```typescript
 _trace: {
-  stepName?: string;   // label for this step (default: 'anthropic.messages.create')
-  projectId?: number;  // overrides tracer-level projectId for this call
+  stepName?: string;  // label shown in the dashboard (default: step_1, step_2, …)
 }
 ```
 
-Stripped before the request is forwarded to Anthropic — the provider never sees it.
+Stripped before forwarding to Anthropic — the provider never sees it.
 
-### `getCost(model, inputTokens, outputTokens)`
-
-Returns USD cost using the SDK's internal pricing table. Returns `0` for unknown models.
-
-```typescript
-import { getCost } from '@trace-ai/sdk';
-getCost('claude-haiku-4-5-20251001', 500, 120); // → 0.000088
-```
-
-## What gets traced
+## What gets captured
 
 | Field | Source |
 |---|---|
-| `run_id` | `tracer.runId` |
+| `run_id` | `run.runId` or `tracer.runId` |
 | `step_name` | `_trace.stepName` |
 | `model` | `response.model` |
-| `prompt` | `JSON.stringify({ system, messages })` |
-| `input_tokens` / `output_tokens` / `total_tokens` | `response.usage` |
+| `input_tokens` / `output_tokens` | `response.usage` |
 | `latency_ms` | wall-clock ms |
-| `cost` | computed from pricing table |
-| `status_success` | `true` on success, `false` on error |
-| `output_code` | text content from response |
-| `error` | error message if call threw |
-
-On error: trace is sent with `status_success: false`, all token fields `0`, then the original exception is re-thrown.
+| `cost` | computed from built-in pricing table |
+| `status_success` | `true` on success, `false` on thrown error |
+| `output_code` | full text content from response |
+| `error` | error message if the call threw |
 
 ## Ingest is fire-and-forget
 
-The POST to `/ingest` never blocks your app. Network errors are logged to `console.warn` and silently dropped.
+The POST to `/ingest` never blocks your app. Network failures are logged to `console.warn` and silently dropped — your LLM calls always complete normally.
 
-## Building (SDK contributors)
+## Dashboard
 
-```bash
-cd sdk
-npm install
-npm run build      # compile src/ → dist/
-npm run dev        # watch mode
-npm run typecheck  # tsc --noEmit
-```
+View traces, anomaly scores, AI-powered run analysis, and cost breakdowns at [trace.ai](https://trace.ai).

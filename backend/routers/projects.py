@@ -40,6 +40,9 @@ class WebhookUpdate(BaseModel):
 
 class ProjectWithCallsResponse(ProjectResponse):
     call_count: int
+    error_count: int = 0
+    anomaly_count: int = 0
+    last_active: Optional[str] = None
 
 
 @router.post("/", response_model=ProjectResponse, status_code=201)
@@ -78,8 +81,21 @@ def list_projects_by_owner(owner_id: int) -> List[ProjectWithCallsResponse]:
 
         result = []
         for project in projects_res.data:
-            calls_res = client.table("CALLS").select("id", count="exact").eq("project_id", project["id"]).execute()
-            result.append(ProjectWithCallsResponse(**project, call_count=len(calls_res.data)))
+            pid = project["id"]
+            calls_res = client.table("CALLS").select("id,status_success,created_at").eq("project_id", pid).order("created_at", desc=True).execute()
+            rows = calls_res.data or []
+            call_count = len(rows)
+            error_count = sum(1 for r in rows if not r.get("status_success", True))
+            last_active = rows[0]["created_at"] if rows else None
+            anomaly_res = client.table("ANOMALIES").select("id", count="exact").eq("project_id", pid).execute()
+            anomaly_count = len(anomaly_res.data or [])
+            result.append(ProjectWithCallsResponse(
+                **project,
+                call_count=call_count,
+                error_count=error_count,
+                anomaly_count=anomaly_count,
+                last_active=last_active,
+            ))
 
         return result
     except Exception as exc:
