@@ -26,6 +26,10 @@ class ProjectResponse(BaseModel):
     sentry_dsn: Optional[str] = None
     sentry_alert_level: Optional[str] = 'critical'
     slack_anomaly_level: Optional[str] = 'critical'
+    threshold_mode: Optional[str] = 'dynamic'
+    threshold_latency_ms: Optional[float] = None
+    threshold_tokens: Optional[float] = None
+    threshold_cost: Optional[float] = None
 
 
 class WebhookUpdate(BaseModel):
@@ -36,6 +40,10 @@ class WebhookUpdate(BaseModel):
     sentry_dsn: Optional[str] = None
     sentry_alert_level: Optional[str] = None
     slack_anomaly_level: Optional[str] = None
+    threshold_mode: Optional[str] = None
+    threshold_latency_ms: Optional[float] = None
+    threshold_tokens: Optional[float] = None
+    threshold_cost: Optional[float] = None
 
 
 class ProjectWithCallsResponse(ProjectResponse):
@@ -183,6 +191,11 @@ def update_webhook(project_id: int, body: WebhookUpdate) -> ProjectResponse:
             updates["sentry_alert_level"] = body.sentry_alert_level
         if body.slack_anomaly_level is not None:
             updates["slack_anomaly_level"] = body.slack_anomaly_level
+        if body.threshold_mode is not None:
+            updates["threshold_mode"] = body.threshold_mode
+        updates["threshold_latency_ms"] = body.threshold_latency_ms
+        updates["threshold_tokens"] = body.threshold_tokens
+        updates["threshold_cost"] = body.threshold_cost
         res = client.table("PROJECTS").update(updates).eq("id", project_id).execute()
         if not res.data:
             raise HTTPException(status_code=404, detail="Project not found")

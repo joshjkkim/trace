@@ -20,6 +20,10 @@ interface Project {
   sentry_dsn?: string | null;
   sentry_alert_level?: string | null;
   slack_anomaly_level?: string | null;
+  threshold_mode?: string | null;
+  threshold_latency_ms?: number | null;
+  threshold_tokens?: number | null;
+  threshold_cost?: number | null;
 }
 
 interface Call {
@@ -1061,75 +1065,6 @@ interface ThresholdData {
   };
 }
 
-function BaselineSection({ projectId }: { projectId: number }) {
-  const [data, setData] = useState<ThresholdData | null>(null);
-  const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
-
-  useEffect(() => {
-    fetch(`${BACKEND}/projects/${projectId}/thresholds`)
-      .then(r => r.json())
-      .then(setData)
-      .catch(() => {});
-  }, [projectId, BACKEND]);
-
-  if (!data) return <div className="text-xs text-gray-600">Loading baseline…</div>;
-
-  const rows = [
-    {
-      label: 'Latency',
-      threshold: `${data.thresholds.latency_ms_max.toLocaleString()}ms`,
-      baseline: data.baselines?.latency_ms
-        ? `avg ${data.baselines.latency_ms.mean.toLocaleString()}ms ± ${data.baselines.latency_ms.stddev.toLocaleString()}ms`
-        : null,
-    },
-    {
-      label: 'Total tokens',
-      threshold: data.thresholds.total_tokens_max.toLocaleString(),
-      baseline: data.baselines?.total_tokens
-        ? `avg ${Math.round(data.baselines.total_tokens.mean).toLocaleString()} ± ${Math.round(data.baselines.total_tokens.stddev).toLocaleString()}`
-        : null,
-    },
-    {
-      label: 'Cost',
-      threshold: `$${data.thresholds.cost_max.toFixed(4)}`,
-      baseline: data.baselines?.cost
-        ? `avg $${data.baselines.cost.mean.toFixed(4)} ± $${data.baselines.cost.stddev.toFixed(4)}`
-        : null,
-    },
-  ];
-
-  return (
-    <div className="border border-gray-800 rounded-xl p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-300">L4 anomaly baseline</h3>
-        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-          data.mode === 'dynamic'
-            ? 'bg-emerald-900/40 text-emerald-400'
-            : 'bg-gray-800 text-gray-500'
-        }`}>
-          {data.mode === 'dynamic' ? `dynamic · ${data.calls_used} calls` : `static · ${data.calls_needed} more calls to adapt`}
-        </span>
-      </div>
-      <p className="text-xs text-gray-600">
-        {data.mode === 'dynamic'
-          ? 'Thresholds are learned from your project\'s history (mean + 2σ). They adapt as new calls come in.'
-          : `Using static defaults until ${data.calls_needed} more calls are recorded.`}
-      </p>
-      <div className="space-y-2">
-        {rows.map(({ label, threshold, baseline }) => (
-          <div key={label} className="flex items-center justify-between text-sm">
-            <span className="text-gray-500">{label}</span>
-            <div className="text-right">
-              <span className="text-gray-200 font-mono text-xs">{threshold}</span>
-              {baseline && <div className="text-xs text-gray-600">{baseline}</div>}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function SettingsTab({ project }: { project: Project }) {
   const [url, setUrl] = useState(project.slack_webhook_url ?? '');
   const [alertOnError, setAlertOnError] = useState(project.alert_on_error ?? true);
@@ -1144,9 +1079,24 @@ function SettingsTab({ project }: { project: Project }) {
   const [slackAnomalyLevel, setSlackAnomalyLevel] = useState<'critical' | 'warning' | 'none'>(
     (project.slack_anomaly_level as 'critical' | 'warning' | 'none') ?? 'critical'
   );
+  const [thresholdMode, setThresholdMode] = useState<'dynamic' | 'manual'>(
+    (project.threshold_mode as 'dynamic' | 'manual') ?? 'dynamic'
+  );
+  const [manualLatency, setManualLatency] = useState(project.threshold_latency_ms?.toString() ?? '');
+  const [manualTokens, setManualTokens]   = useState(project.threshold_tokens?.toString() ?? '');
+  const [manualCost, setManualCost]       = useState(project.threshold_cost?.toString() ?? '');
+  const [baseline, setBaseline] = useState<ThresholdData | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
+
+  useEffect(() => {
+    fetch(`${BACKEND_URL}/projects/${project.id}/thresholds`)
+      .then(r => r.json())
+      .then(setBaseline)
+      .catch(() => {});
+  }, [project.id, BACKEND_URL]);
 
   async function save() {
     setSaving(true);
@@ -1163,6 +1113,10 @@ function SettingsTab({ project }: { project: Project }) {
           sentry_dsn: sentryDsn.trim() || null,
           sentry_alert_level: sentryLevel,
           slack_anomaly_level: slackAnomalyLevel,
+          threshold_mode: thresholdMode,
+          threshold_latency_ms: thresholdMode === 'manual' && manualLatency ? parseFloat(manualLatency) : null,
+          threshold_tokens: thresholdMode === 'manual' && manualTokens ? parseFloat(manualTokens) : null,
+          threshold_cost: thresholdMode === 'manual' && manualCost ? parseFloat(manualCost) : null,
         }),
       });
       if (!res.ok) throw new Error(await res.text());
@@ -1349,7 +1303,77 @@ function SettingsTab({ project }: { project: Project }) {
         </div>
       </div>
 
-      <BaselineSection projectId={project.id} />
+      {/* L4 thresholds */}
+      <div className="border border-gray-800 rounded-xl p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-300">L4 anomaly thresholds</h3>
+            <p className="text-xs text-gray-600 mt-0.5">Latency, token, and cost limits for anomaly detection</p>
+          </div>
+          <div className="flex rounded-lg overflow-hidden border border-gray-700 text-xs">
+            {(['dynamic', 'manual'] as const).map(opt => (
+              <button
+                key={opt}
+                onClick={() => setThresholdMode(opt)}
+                className={`px-3 py-1.5 capitalize transition-colors ${
+                  thresholdMode === opt
+                    ? 'bg-gray-700 text-white'
+                    : 'text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                {opt}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {thresholdMode === 'dynamic' ? (
+          baseline ? (
+            <div className="space-y-2">
+              <p className="text-xs text-gray-600">
+                {baseline.mode === 'dynamic'
+                  ? `Learned from ${baseline.calls_used} calls (mean + 2σ). Updates automatically.`
+                  : `Static defaults active — ${baseline.calls_needed} more calls needed to adapt.`}
+              </p>
+              {[
+                { label: 'Latency', value: `${baseline.thresholds.latency_ms_max.toLocaleString()}ms`, sub: baseline.baselines?.latency_ms ? `avg ${baseline.baselines.latency_ms.mean.toLocaleString()}ms` : null },
+                { label: 'Tokens', value: baseline.thresholds.total_tokens_max.toLocaleString(), sub: baseline.baselines?.total_tokens ? `avg ${Math.round(baseline.baselines.total_tokens.mean).toLocaleString()}` : null },
+                { label: 'Cost', value: `$${baseline.thresholds.cost_max.toFixed(4)}`, sub: baseline.baselines?.cost ? `avg $${baseline.baselines.cost.mean.toFixed(4)}` : null },
+              ].map(({ label, value, sub }) => (
+                <div key={label} className="flex items-center justify-between text-sm">
+                  <span className="text-gray-500">{label}</span>
+                  <div className="text-right">
+                    <span className="text-gray-300 font-mono text-xs">{value}</span>
+                    {sub && <div className="text-xs text-gray-600">{sub}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : <p className="text-xs text-gray-600">Loading baseline…</p>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-xs text-gray-600">Override limits — leave blank to keep the static default.</p>
+            {[
+              { label: 'Max latency (ms)', placeholder: '10000', value: manualLatency, onChange: setManualLatency },
+              { label: 'Max total tokens', placeholder: '50000', value: manualTokens, onChange: setManualTokens },
+              { label: 'Max cost (USD)', placeholder: '1.00', value: manualCost, onChange: setManualCost },
+            ].map(({ label, placeholder, value, onChange }) => (
+              <div key={label} className="flex items-center justify-between gap-4">
+                <label className="text-sm text-gray-400 shrink-0">{label}</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder={placeholder}
+                  value={value}
+                  onChange={e => onChange(e.target.value)}
+                  className="w-36 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-gray-100 font-mono placeholder-gray-600 focus:outline-none focus:border-gray-500"
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Save — covers everything above */}
       {msg && (

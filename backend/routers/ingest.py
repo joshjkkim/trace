@@ -184,10 +184,23 @@ def _run_anomaly_detection(payload: IngestPayload, project: dict | None) -> None
         )
         config = EvalConfig()
         if project:
-            dynamic = _dynamic_l4_limits(project["id"])
-            if dynamic:
-                config = EvalConfig(limits={**config.limits, **dynamic})
-                print(f"[anomaly] dynamic L4 limits for project {project['id']}: {dynamic}")
+            mode = project.get("threshold_mode", "dynamic")
+            if mode == "manual":
+                overrides: dict[str, float] = {}
+                if project.get("threshold_latency_ms") is not None:
+                    overrides["latency_ms_max"] = project["threshold_latency_ms"]
+                if project.get("threshold_tokens") is not None:
+                    overrides["total_tokens_max"] = project["threshold_tokens"]
+                if project.get("threshold_cost") is not None:
+                    overrides["cost_max"] = project["threshold_cost"]
+                if overrides:
+                    config = EvalConfig(limits={**config.limits, **overrides})
+                    print(f"[anomaly] manual L4 limits for project {project['id']}: {overrides}")
+            else:
+                dynamic = _dynamic_l4_limits(project["id"])
+                if dynamic:
+                    config = EvalConfig(limits={**config.limits, **dynamic})
+                    print(f"[anomaly] dynamic L4 limits for project {project['id']}: {dynamic}")
         result = evaluate_call(call_input, config)
         print(f"[anomaly] run={payload.run_id} step={payload.step_name} score={result.total_score} triggered={result.triggered} layer={result.stopped_at_layer} codes={dict(result.error_map)}")
         if result.error_map:
