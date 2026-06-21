@@ -84,7 +84,9 @@ def run_layer_4_integers(payload: CallInput, config: EvalConfig) -> list[EvalHit
         fire(4008, observed=out_tok, expected="<= 500")
 
     # 4009 — chars-per-token outside the plausible range (garbled accounting).
-    if out_tok > 0 and out:
+    # Only meaningful for longer outputs — short classify responses (1-3 tokens)
+    # have too little signal for the ratio to be reliable.
+    if out_tok >= 10 and out:
         cpt = len(out) / out_tok
         if cpt < lim["chars_per_token_min"] or cpt > lim["chars_per_token_max"]:
             fire(

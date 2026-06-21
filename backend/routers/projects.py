@@ -23,6 +23,8 @@ class ProjectResponse(BaseModel):
     alert_on_error: Optional[bool] = True
     alert_error_rate_threshold: Optional[float] = 0.25
     alert_error_rate_window: Optional[int] = 20
+    sentry_dsn: Optional[str] = None
+    sentry_alert_level: Optional[str] = 'critical'
 
 
 class WebhookUpdate(BaseModel):
@@ -30,6 +32,8 @@ class WebhookUpdate(BaseModel):
     alert_on_error: Optional[bool] = None
     alert_error_rate_threshold: Optional[float] = None
     alert_error_rate_window: Optional[int] = None
+    sentry_dsn: Optional[str] = None
+    sentry_alert_level: Optional[str] = None
 
 
 class ProjectWithCallsResponse(ProjectResponse):
@@ -156,6 +160,9 @@ def update_webhook(project_id: int, body: WebhookUpdate) -> ProjectResponse:
             updates["alert_error_rate_threshold"] = body.alert_error_rate_threshold
         if body.alert_error_rate_window is not None:
             updates["alert_error_rate_window"] = body.alert_error_rate_window
+        updates["sentry_dsn"] = body.sentry_dsn
+        if body.sentry_alert_level is not None:
+            updates["sentry_alert_level"] = body.sentry_alert_level
         res = client.table("PROJECTS").update(updates).eq("id", project_id).execute()
         if not res.data:
             raise HTTPException(status_code=404, detail="Project not found")

@@ -17,6 +17,8 @@ interface Project {
   alert_on_error?: boolean;
   alert_error_rate_threshold?: number | null;
   alert_error_rate_window?: number | null;
+  sentry_dsn?: string | null;
+  sentry_alert_level?: string | null;
 }
 
 interface Call {
@@ -961,6 +963,10 @@ function SettingsTab({ project }: { project: Project }) {
     Math.round((project.alert_error_rate_threshold ?? 0.25) * 100)
   );
   const [rateWindow, setRateWindow] = useState(project.alert_error_rate_window ?? 20);
+  const [sentryDsn, setSentryDsn] = useState(project.sentry_dsn ?? '');
+  const [sentryLevel, setSentryLevel] = useState<'critical' | 'warning' | 'none'>(
+    (project.sentry_alert_level as 'critical' | 'warning' | 'none') ?? 'critical'
+  );
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -977,6 +983,8 @@ function SettingsTab({ project }: { project: Project }) {
           alert_on_error: alertOnError,
           alert_error_rate_threshold: rateThreshold / 100,
           alert_error_rate_window: rateWindow,
+          sentry_dsn: sentryDsn.trim() || null,
+          sentry_alert_level: sentryLevel,
         }),
       });
       if (!res.ok) throw new Error(await res.text());
@@ -1085,6 +1093,52 @@ function SettingsTab({ project }: { project: Project }) {
             </div>
           </div>
 
+        </div>
+      </div>
+
+      {/* Sentry integration */}
+      <div>
+        <h2 className="text-base font-semibold text-gray-100 mb-1">Sentry integration</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          When trace.ai detects a critical anomaly, it sends a structured event to your Sentry project — grouped by step name, tagged with model and layer, ready to trigger your existing alerts.
+        </p>
+        <label className="block text-xs text-gray-400 mb-1.5">Sentry DSN</label>
+        <input
+          type="url"
+          value={sentryDsn}
+          onChange={(e) => setSentryDsn(e.target.value)}
+          placeholder="https://…@o….ingest.sentry.io/…"
+          className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-gray-500 font-mono"
+        />
+        <p className="text-xs text-gray-600 mt-2">
+          Find this in your Sentry project under Settings → Client Keys (DSN).
+        </p>
+
+        <div className="mt-5">
+          <label className="block text-xs text-gray-400 mb-2">Forward to Sentry when</label>
+          <div className="inline-flex rounded-lg border border-gray-700 overflow-hidden">
+            {(['critical', 'warning', 'none'] as const).map((opt) => (
+              <button
+                key={opt}
+                onClick={() => setSentryLevel(opt)}
+                className={[
+                  'px-4 py-2 text-xs font-medium transition-colors capitalize',
+                  sentryLevel === opt
+                    ? opt === 'critical' ? 'bg-red-900/60 text-red-300 border-r border-gray-700'
+                      : opt === 'warning' ? 'bg-yellow-900/40 text-yellow-400 border-r border-gray-700'
+                      : 'bg-gray-800 text-gray-300'
+                    : 'bg-transparent text-gray-500 hover:text-gray-300 border-r border-gray-700 last:border-r-0',
+                ].join(' ')}
+              >
+                {opt === 'critical' ? 'Critical only' : opt === 'warning' ? 'Warning + critical' : 'Off'}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-gray-600 mt-2">
+            {sentryLevel === 'critical' && 'Sends to Sentry when run score crosses the threshold (≥ 100pts).'}
+            {sentryLevel === 'warning' && 'Sends to Sentry for any anomaly hit, even below threshold.'}
+            {sentryLevel === 'none' && 'Sentry DSN saved but no events will be forwarded.'}
+          </p>
         </div>
       </div>
 

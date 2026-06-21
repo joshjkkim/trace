@@ -54,21 +54,8 @@ def evaluate_call(payload: CallInput, config: EvalConfig | None = None) -> EvalR
 
     triggered = total >= config.threshold
 
-    if not triggered:
-        # Clean: store nothing (sub-threshold hits are discarded by design).
-        return EvalResult(
-            triggered=False,
-            total_score=0.0,
-            threshold=config.threshold,
-            stopped_at_layer=None,
-            hits=[],
-            error_map={},
-            prompt_shape=prompt_shape,
-            output_shape=output_shape,
-        )
-
     return EvalResult(
-        triggered=True,
+        triggered=triggered,
         total_score=total,
         threshold=config.threshold,
         stopped_at_layer=stopped_at,
