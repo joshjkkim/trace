@@ -82,6 +82,92 @@ def _fire_slack(project: dict, payload: IngestPayload) -> None:
         print(f"[ingest] error rate check failed: {exc}")
 
 
+def _fire_user_sentry_performance(
+    dsn: str, payload: IngestPayload, anomaly_score: float, triggered: bool, project_name: str
+) -> None:
+    """Send a Sentry Performance transaction for every LLM call — not just anomalous ones.
+    Steps in the same run share a trace_id so Sentry can reconstruct the full pipeline."""
+    try:
+        import datetime, uuid as _uuid
+
+        user_client = SentryClient(dsn=dsn, traces_sample_rate=1.0, default_integrations=False)
+
+        now   = datetime.datetime.now(datetime.timezone.utc)
+        start = now - datetime.timedelta(milliseconds=payload.latency_ms or 0)
+
+        # Deterministic trace_id from run_id so all steps in a run share the same trace
+        trace_id   = _uuid.uuid5(_uuid.NAMESPACE_URL, f"trace-ai:{payload.run_id}").hex  # 32 hex
+        span_id    = _uuid.uuid4().hex[:16]
+        child_span = _uuid.uuid4().hex[:16]
+        status     = "ok" if payload.status_success else "internal_error"
+
+        event = {
+            "type": "transaction",
+            "transaction": payload.step_name or "unknown_step",
+            "transaction_info": {"source": "custom"},
+            "start_timestamp": start.isoformat(),
+            "timestamp": now.isoformat(),
+            "contexts": {
+                "trace": {
+                    "trace_id": trace_id,
+                    "span_id": span_id,
+                    "op": "ai.inference",
+                    "status": status,
+                    "data": {
+                        "trace_ai.run_id": payload.run_id,
+                        "trace_ai.project": project_name,
+                        "trace_ai.anomaly_score": anomaly_score,
+                        "trace_ai.triggered": triggered,
+                    },
+                }
+            },
+            "spans": [
+                {
+                    "trace_id": trace_id,
+                    "span_id": child_span,
+                    "parent_span_id": span_id,
+                    "op": "ai.model.invoke",
+                    "description": payload.model or "unknown",
+                    "start_timestamp": start.isoformat(),
+                    "timestamp": now.isoformat(),
+                    "status": status,
+                    "data": {
+                        "ai.model_id": payload.model,
+                        # OpenTelemetry GenAI semantic conventions
+                        "gen_ai.usage.input_tokens":  payload.input_tokens  or 0,
+                        "gen_ai.usage.output_tokens": payload.output_tokens or 0,
+                        "gen_ai.system": "anthropic",
+                    },
+                }
+            ],
+            "measurements": {
+                "latency_ms":    {"value": payload.latency_ms   or 0,                      "unit": "millisecond"},
+                "input_tokens":  {"value": payload.input_tokens or 0,                      "unit": "none"},
+                "output_tokens": {"value": payload.output_tokens or 0,                     "unit": "none"},
+                "total_tokens":  {"value": payload.total_tokens or 0,                      "unit": "none"},
+                "cost_usd_x1000": {"value": round((payload.cost or 0) * 1000, 4),         "unit": "none"},
+                "anomaly_score": {"value": anomaly_score,                                  "unit": "none"},
+            },
+            "tags": {
+                "trace_ai.run_id":     payload.run_id,
+                "trace_ai.model":      payload.model or "unknown",
+                "trace_ai.step":       payload.step_name or "unknown",
+                "trace_ai.step_index": str(payload.step_index or 0),
+                "trace_ai.project":    project_name,
+                "trace_ai.success":    str(payload.status_success),
+                "trace_ai.triggered":  str(triggered),
+            },
+            "level": "error" if triggered else "info",
+        }
+
+        scope = Scope()
+        user_client.capture_event(event, scope=scope)
+        user_client.flush(timeout=3)
+        print(f"[sentry-perf] transaction: step={payload.step_name} trace={trace_id[:8]}… score={anomaly_score}")
+    except Exception as exc:
+        print(f"[ingest] sentry performance failed: {exc}")
+
+
 def _fire_user_sentry(dsn: str, payload: IngestPayload, result, project_name: str) -> None:
     """Send an anomaly event to the user's own Sentry project."""
     try:
@@ -200,6 +286,13 @@ def _run_anomaly_detection(payload: IngestPayload, project: dict | None) -> None
                     print(f"[anomaly] dynamic L4 limits for project {project['id']}: {dynamic}")
         result = evaluate_call(call_input, config)
         print(f"[anomaly] run={payload.run_id} step={payload.step_name} score={result.total_score} triggered={result.triggered} layer={result.stopped_at_layer} codes={dict(result.error_map)}")
+
+        # Performance transaction for every call — fires even if no anomaly
+        _perf_dsn   = project.get("sentry_dsn") if project else None
+        _perf_level = (project.get("sentry_alert_level") or "critical") if project else "critical"
+        if _perf_dsn and _perf_level != "none":
+            _fire_user_sentry_performance(_perf_dsn, payload, result.total_score, result.triggered, project.get("name", "unknown"))
+
         if result.error_map:
             from schemas.anomaly import AnomalyInput
             ingest_anomalies(
