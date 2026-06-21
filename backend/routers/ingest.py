@@ -7,7 +7,7 @@ from sentry_sdk import Client as SentryClient, Scope
 from schemas.trace import IngestPayload, IngestResponse
 from services.trace_service import ingest_trace
 from services.slack_service import (
-    send_error_alert, send_rate_alert,
+    send_error_alert, send_rate_alert, send_anomaly_alert,
     RATE_THRESHOLD, RATE_WINDOW,
 )
 from services.anomaly_service import ingest_anomalies
@@ -100,15 +100,15 @@ def _fire_user_sentry(dsn: str, payload: IngestPayload, result, project_name: st
         scope.set_extra("error_map", dict(result.error_map))
         scope.fingerprint = ["trace-ai", "anomaly", payload.step_name or "unknown"]
         level = "error" if result.triggered else "warning"
-        user_client.capture_event(
+        event_id = user_client.capture_event(
             {
                 "message": f"[trace.ai] {'Critical anomaly' if result.triggered else 'Anomaly warning'} in '{payload.step_name}' — {result.total_score}pts ({codes_summary})",
                 "level": level,
             },
             scope=scope,
         )
-        user_client.flush(timeout=5)
-        print(f"[sentry] fired to user DSN: step={payload.step_name} score={result.total_score} triggered={result.triggered}")
+        flushed = user_client.flush(timeout=5)
+        print(f"[sentry] event_id={event_id} flushed={flushed} step={payload.step_name} score={result.total_score} level={level}")
     except Exception as exc:
         print(f"[ingest] user sentry fire failed: {exc}")
 
@@ -155,6 +155,27 @@ def _run_anomaly_detection(payload: IngestPayload, project: dict | None) -> None
             if dsn and level != "none":
                 if level == "warning" or result.triggered:
                     _fire_user_sentry(dsn, payload, result, project.get("name", "unknown"))
+
+            webhook = project.get("slack_webhook_url") if project else None
+            slack_level = (project.get("slack_anomaly_level") or "critical") if project else "critical"
+            if webhook and slack_level != "none":
+                if slack_level == "warning" or result.triggered:
+                    from anomaly import CONDITION_REGISTRY
+                    condition_names = {
+                        code: (CONDITION_REGISTRY[code].name if code in CONDITION_REGISTRY else "")
+                        for code in result.error_map
+                    }
+                    send_anomaly_alert(
+                        webhook_url=webhook,
+                        project_name=project.get("name", "unknown"),
+                        project_id=project["id"],
+                        step_name=payload.step_name,
+                        run_id=payload.run_id,
+                        total_score=result.total_score,
+                        error_map=dict(result.error_map),
+                        condition_names=condition_names,
+                        triggered=result.triggered,
+                    )
     except Exception as exc:
         print(f"[ingest] anomaly detection failed for run {payload.run_id}: {exc}")
 

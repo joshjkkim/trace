@@ -5,7 +5,7 @@ from sentry_sdk.integrations.starlette import StarletteIntegration
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from db import check_connection
-from routers import ingest, traces, projects, calls, anomalies
+from routers import ingest, traces, projects, calls, anomalies, analyze
 
 sentry_sdk.init(
     dsn=os.environ.get("SENTRY_DSN"),
@@ -16,9 +16,12 @@ sentry_sdk.init(
 
 app = FastAPI(title="Trace API", version="0.1.0")
 
+_origins_env = os.environ.get("ALLOWED_ORIGINS", "")
+_allowed_origins = [o.strip() for o in _origins_env.split(",") if o.strip()] or ["http://localhost:3000"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=_allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -29,6 +32,7 @@ app.include_router(traces.runs_router)
 app.include_router(projects.router)      # ADD THIS
 app.include_router(calls.router)
 app.include_router(anomalies.router)
+app.include_router(analyze.router)
 
 @app.get("/debug-sentry")
 def debug_sentry() -> dict:

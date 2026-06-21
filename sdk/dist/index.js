@@ -62,7 +62,10 @@ var TracedRun = class {
     this.tracer = tracer;
     this.stepIndex = 0;
     this.runId = uuid();
-    this.messages = { create: (params) => this._create(params) };
+    this.messages = {
+      create: (params) => this._create(params),
+      stream: (params) => this._stream(params)
+    };
   }
   async _create(params) {
     const { _trace, ...cleanParams } = params;
@@ -112,6 +115,54 @@ var TracedRun = class {
       });
       throw err;
     }
+  }
+  _stream(params) {
+    const { _trace, ...cleanParams } = params;
+    const currentStep = this.stepIndex++;
+    const stepName = _trace?.stepName ?? `step_${currentStep + 1}`;
+    const start = Date.now();
+    if (!this.client.messages.stream) {
+      throw new Error("[trace-ai] This Anthropic client does not support streaming.");
+    }
+    const messageStream = this.client.messages.stream(cleanParams);
+    messageStream.finalMessage().then((response) => {
+      const latency_ms = Date.now() - start;
+      const input_tokens = response.usage?.input_tokens ?? 0;
+      const output_tokens = response.usage?.output_tokens ?? 0;
+      const total_tokens = input_tokens + output_tokens;
+      const model = response.model ?? cleanParams.model;
+      this.tracer.ingest({
+        run_id: this.runId,
+        step_name: stepName,
+        step_index: currentStep,
+        model,
+        prompt: JSON.stringify({ system: cleanParams.system, messages: cleanParams.messages }),
+        input_tokens,
+        output_tokens,
+        total_tokens,
+        latency_ms,
+        cost: getCost(model, input_tokens, output_tokens),
+        status_success: true,
+        output_code: extractOutputCode(response)
+      });
+    }).catch((err) => {
+      const latency_ms = Date.now() - start;
+      this.tracer.ingest({
+        run_id: this.runId,
+        step_name: stepName,
+        step_index: currentStep,
+        model: cleanParams.model,
+        prompt: JSON.stringify({ system: cleanParams.system, messages: cleanParams.messages }),
+        input_tokens: 0,
+        output_tokens: 0,
+        total_tokens: 0,
+        latency_ms,
+        cost: 0,
+        status_success: false,
+        error: err instanceof Error ? err.message : String(err)
+      });
+    });
+    return messageStream;
   }
 };
 
@@ -172,6 +223,54 @@ function wrapAnthropic(client, tracer) {
           });
           throw err;
         }
+      },
+      stream(params) {
+        const { _trace, ...cleanParams } = params;
+        const currentStep = stepIndex++;
+        const stepName = _trace?.stepName ?? `step_${currentStep + 1}`;
+        const start = Date.now();
+        if (!client.messages.stream) {
+          throw new Error("[trace-ai] This Anthropic client does not support streaming.");
+        }
+        const messageStream = client.messages.stream(cleanParams);
+        messageStream.finalMessage().then((response) => {
+          const latency_ms = Date.now() - start;
+          const input_tokens = response.usage?.input_tokens ?? 0;
+          const output_tokens = response.usage?.output_tokens ?? 0;
+          const total_tokens = input_tokens + output_tokens;
+          const model = response.model ?? cleanParams.model;
+          tracer.ingest({
+            run_id: tracer.runId,
+            step_name: stepName,
+            step_index: currentStep,
+            model,
+            prompt: JSON.stringify({ system: cleanParams.system, messages: cleanParams.messages }),
+            input_tokens,
+            output_tokens,
+            total_tokens,
+            latency_ms,
+            cost: getCost(model, input_tokens, output_tokens),
+            status_success: true,
+            output_code: extractOutputCode2(response)
+          });
+        }).catch((err) => {
+          const latency_ms = Date.now() - start;
+          tracer.ingest({
+            run_id: tracer.runId,
+            step_name: stepName,
+            step_index: currentStep,
+            model: cleanParams.model,
+            prompt: JSON.stringify({ system: cleanParams.system, messages: cleanParams.messages }),
+            input_tokens: 0,
+            output_tokens: 0,
+            total_tokens: 0,
+            latency_ms,
+            cost: 0,
+            status_success: false,
+            error: err instanceof Error ? err.message : String(err)
+          });
+        });
+        return messageStream;
       }
     },
     run() {

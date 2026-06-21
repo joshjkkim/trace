@@ -19,6 +19,7 @@ interface Project {
   alert_error_rate_window?: number | null;
   sentry_dsn?: string | null;
   sentry_alert_level?: string | null;
+  slack_anomaly_level?: string | null;
 }
 
 interface Call {
@@ -180,6 +181,8 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
   const [selectedCall, setSelectedCall]   = useState<Call | null>(null);
   const [anomalies, setAnomalies]         = useState<AnomalyRow[]>([]);
   const [conditionRegistry, setConditionRegistry] = useState<ConditionRegistry>({});
+  const [analysis, setAnalysis]           = useState<{ runId: string; text: string; costUsd: number } | null>(null);
+  const [analyzing, setAnalyzing]         = useState(false);
 
   const runs = useMemo(() => groupIntoRuns(calls), [calls]);
   const selectedRun = useMemo(
@@ -192,6 +195,21 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
     () => new Map(anomalyRuns.map((r) => [r.run_id, r])),
     [anomalyRuns],
   );
+
+  async function analyzeRun(runId: string) {
+    setAnalyzing(true);
+    setAnalysis(null);
+    try {
+      const res = await fetch(`${BACKEND}/analyze/run/${runId}`, { method: 'POST' });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setAnalysis({ runId, text: data.analysis, costUsd: data.cost_usd });
+    } catch (e) {
+      console.error('[analyze]', e);
+    } finally {
+      setAnalyzing(false);
+    }
+  }
 
   useEffect(() => {
     async function init() {
@@ -346,21 +364,39 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
         {tab === 'runs' && selectedRunId && selectedRun && (
           <div>
             <button
-              onClick={() => setSelectedRunId(null)}
+              onClick={() => { setSelectedRunId(null); setAnalysis(null); }}
               className="text-gray-500 hover:text-gray-300 text-sm mb-6 transition-colors flex items-center gap-1.5"
             >
               ← Runs
             </button>
-            <div className="mb-6">
-              <p className="text-xs text-gray-500 mb-1">Run ID</p>
-              <code className="text-sm font-mono text-gray-300">{selectedRun.runId}</code>
-              <div className="flex gap-4 mt-2 text-xs text-gray-500">
-                <span>{selectedRun.steps.length} steps</span>
-                <span>${selectedRun.totalCost.toFixed(6)}</span>
-                <span>{selectedRun.totalLatency}ms total</span>
-                {selectedRun.errorCount > 0 && <span className="text-red-400">{selectedRun.errorCount} error{selectedRun.errorCount > 1 ? 's' : ''}</span>}
+            <div className="mb-6 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Run ID</p>
+                <code className="text-sm font-mono text-gray-300">{selectedRun.runId}</code>
+                <div className="flex gap-4 mt-2 text-xs text-gray-500">
+                  <span>{selectedRun.steps.length} steps</span>
+                  <span>${selectedRun.totalCost.toFixed(6)}</span>
+                  <span>{selectedRun.totalLatency}ms total</span>
+                  {selectedRun.errorCount > 0 && <span className="text-red-400">{selectedRun.errorCount} error{selectedRun.errorCount > 1 ? 's' : ''}</span>}
+                </div>
               </div>
+              <button
+                onClick={() => analyzeRun(selectedRun.runId)}
+                disabled={analyzing}
+                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-indigo-700 bg-indigo-950/60 text-indigo-300 hover:bg-indigo-900/60 hover:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {analyzing ? (
+                  <><span className="animate-spin text-[10px]">◌</span> Analyzing…</>
+                ) : (
+                  <>✦ Analyze Run</>
+                )}
+              </button>
             </div>
+
+            {analysis && analysis.runId === selectedRun.runId && (
+              <AnalysisPanel text={analysis.text} costUsd={analysis.costUsd} onClose={() => setAnalysis(null)} />
+            )}
+
             <RunGraph steps={selectedRun.steps} anomalyRun={anomalyMap.get(selectedRun.runId)} registry={conditionRegistry} onSelect={setSelectedCall} />
           </div>
         )}
@@ -850,10 +886,55 @@ function GraphNode({ step, index, anomalyStep, registry, onSelect }: {
   );
 }
 
+// ── AI Analysis panel ─────────────────────────────────────────────────────────
+
+function AnalysisPanel({ text, costUsd, onClose }: { text: string; costUsd: number; onClose: () => void }) {
+  const lines = text.split('\n');
+  return (
+    <div className="mb-6 rounded-xl border border-indigo-800/60 bg-indigo-950/30 px-5 py-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-indigo-400 text-sm">✦</span>
+          <span className="text-xs font-semibold text-indigo-300 uppercase tracking-wider">AI Analysis</span>
+          <span className="text-[10px] text-gray-600 font-mono">claude-sonnet-4-6 · ${costUsd.toFixed(5)}</span>
+        </div>
+        <button onClick={onClose} className="text-gray-600 hover:text-gray-400 text-sm leading-none">×</button>
+      </div>
+      <div className="text-sm text-gray-300 leading-relaxed space-y-1">
+        {lines.map((line, i) => {
+          if (!line.trim()) return <div key={i} className="h-2" />;
+          const isBold = line.startsWith('**') && line.endsWith('**');
+          const clean = isBold ? line.slice(2, -2) : line.replace(/\*\*(.*?)\*\*/g, '$1');
+          return isBold
+            ? <p key={i} className="text-indigo-200 font-semibold text-xs uppercase tracking-wider mt-3 first:mt-0">{clean}</p>
+            : <p key={i} className={line.startsWith('- ') ? 'pl-3 text-gray-400 text-xs' : 'text-gray-300 text-xs'}>{clean}</p>;
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Anomalies tab ─────────────────────────────────────────────────────────────
 
 function AnomaliesTab({ runs, registry }: { runs: AnomalyRun[]; registry: ConditionRegistry }) {
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [analysis, setAnalysis] = useState<{ runId: string; text: string; costUsd: number } | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+
+  async function analyzeRun(runId: string) {
+    setAnalyzing(true);
+    setAnalysis(null);
+    try {
+      const res = await fetch(`${BACKEND}/analyze/run/${runId}`, { method: 'POST' });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setAnalysis({ runId, text: data.analysis, costUsd: data.cost_usd });
+    } catch (e) {
+      console.error('[analyze]', e);
+    } finally {
+      setAnalyzing(false);
+    }
+  }
 
   if (runs.length === 0) {
     return <EmptyState text="No anomalies detected yet." />;
@@ -940,11 +1021,23 @@ function AnomaliesTab({ runs, registry }: { runs: AnomalyRun[]; registry: Condit
                     </div>
                   </div>
                 ))}
-                <div className="flex justify-end pt-1 border-t border-gray-800 mt-2">
+                <div className="flex items-center justify-between pt-2 border-t border-gray-800 mt-2">
                   <span className="text-xs text-gray-500">
                     threshold: {ANOMALY_THRESHOLD} pts — run total: <span className={run.is_critical ? 'text-red-400 font-semibold' : 'text-yellow-500'}>{run.total_score} pts</span>
                   </span>
+                  <button
+                    onClick={() => analyzeRun(run.run_id)}
+                    disabled={analyzing}
+                    className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-lg border border-indigo-700 bg-indigo-950/60 text-indigo-300 hover:bg-indigo-900/60 hover:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {analyzing && analysis?.runId !== run.run_id ? <><span className="animate-spin text-[10px]">◌</span> Analyzing…</> : <>✦ Analyze</>}
+                  </button>
                 </div>
+                {analysis && analysis.runId === run.run_id && (
+                  <div className="mt-3">
+                    <AnalysisPanel text={analysis.text} costUsd={analysis.costUsd} onClose={() => setAnalysis(null)} />
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -967,6 +1060,9 @@ function SettingsTab({ project }: { project: Project }) {
   const [sentryLevel, setSentryLevel] = useState<'critical' | 'warning' | 'none'>(
     (project.sentry_alert_level as 'critical' | 'warning' | 'none') ?? 'critical'
   );
+  const [slackAnomalyLevel, setSlackAnomalyLevel] = useState<'critical' | 'warning' | 'none'>(
+    (project.slack_anomaly_level as 'critical' | 'warning' | 'none') ?? 'critical'
+  );
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -985,6 +1081,7 @@ function SettingsTab({ project }: { project: Project }) {
           alert_error_rate_window: rateWindow,
           sentry_dsn: sentryDsn.trim() || null,
           sentry_alert_level: sentryLevel,
+          slack_anomaly_level: slackAnomalyLevel,
         }),
       });
       if (!res.ok) throw new Error(await res.text());
@@ -1091,6 +1188,35 @@ function SettingsTab({ project }: { project: Project }) {
                 <span className="text-sm text-gray-500">calls</span>
               </div>
             </div>
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-200 mb-1">Anomaly alerts</p>
+            <p className="text-xs text-gray-500 mb-2">Send a Slack message when anomalies are detected. 1 min cooldown between alerts.</p>
+            <div className="inline-flex rounded-lg border border-gray-700 overflow-hidden">
+              {(['critical', 'warning', 'none'] as const).map((opt, i) => (
+                <button
+                  key={opt}
+                  onClick={() => setSlackAnomalyLevel(opt)}
+                  className={[
+                    'px-4 py-2 text-xs font-medium transition-colors',
+                    i < 2 ? 'border-r border-gray-700' : '',
+                    slackAnomalyLevel === opt
+                      ? opt === 'critical' ? 'bg-red-900/60 text-red-300'
+                        : opt === 'warning' ? 'bg-yellow-900/40 text-yellow-400'
+                        : 'bg-gray-800 text-gray-300'
+                      : 'bg-transparent text-gray-500 hover:text-gray-300',
+                  ].join(' ')}
+                >
+                  {opt === 'critical' ? 'Critical only' : opt === 'warning' ? 'Warning + critical' : 'Off'}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-600 mt-2">
+              {slackAnomalyLevel === 'critical' && 'Alerts when anomaly score reaches ≥ 100pts.'}
+              {slackAnomalyLevel === 'warning' && 'Alerts on any anomaly hit, even below threshold.'}
+              {slackAnomalyLevel === 'none' && 'No anomaly alerts sent to Slack.'}
+            </p>
           </div>
 
         </div>

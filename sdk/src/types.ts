@@ -30,12 +30,23 @@ export interface TracePayload {
   error?: string;
 }
 
+/** Minimal shape we need from a streaming response — the real MessageStream satisfies this. */
+export interface MessageStreamLike {
+  finalMessage(): Promise<Message>;
+  [Symbol.asyncIterator](): AsyncIterator<unknown>;
+}
+
 export interface AnthropicClientLike {
   messages: {
     create(params: MessageCreateParamsNonStreaming, options?: unknown): Promise<Message>;
+    stream?(params: MessageCreateParamsNonStreaming, options?: unknown): MessageStreamLike;
   };
 }
 
 export type TracedMessageParams = MessageCreateParamsNonStreaming & {
+  _trace?: TraceOptions;
+};
+
+export type TracedStreamParams = MessageCreateParamsNonStreaming & {
   _trace?: TraceOptions;
 };

@@ -1,6 +1,6 @@
 import type { Message, MessageCreateParamsNonStreaming } from '@anthropic-ai/sdk/resources/messages';
 import type { Tracer } from '../tracer';
-import type { AnthropicClientLike, TracedMessageParams } from '../types';
+import type { AnthropicClientLike, MessageStreamLike, TracedMessageParams, TracedStreamParams } from '../types';
 import { getCost } from '../cost';
 import { TracedRun } from '../run';
 
@@ -8,6 +8,7 @@ export type { AnthropicClientLike, TracedMessageParams };
 
 export interface TracedAnthropicMessages {
   create(params: TracedMessageParams): Promise<Message>;
+  stream(params: TracedStreamParams): MessageStreamLike;
 }
 
 export interface TracedAnthropic {
@@ -83,6 +84,58 @@ export function wrapAnthropic(client: AnthropicClientLike, tracer: Tracer): Trac
 
           throw err;
         }
+      },
+
+      stream(params: TracedStreamParams): MessageStreamLike {
+        const { _trace, ...cleanParams } = params;
+        const currentStep = stepIndex++;
+        const stepName = _trace?.stepName ?? `step_${currentStep + 1}`;
+        const start = Date.now();
+
+        if (!client.messages.stream) {
+          throw new Error('[trace-ai] This Anthropic client does not support streaming.');
+        }
+        const messageStream = client.messages.stream(cleanParams as MessageCreateParamsNonStreaming);
+
+        messageStream.finalMessage().then((response) => {
+          const latency_ms    = Date.now() - start;
+          const input_tokens  = response.usage?.input_tokens  ?? 0;
+          const output_tokens = response.usage?.output_tokens ?? 0;
+          const total_tokens  = input_tokens + output_tokens;
+          const model         = response.model ?? cleanParams.model;
+          tracer.ingest({
+            run_id: tracer.runId,
+            step_name: stepName,
+            step_index: currentStep,
+            model,
+            prompt: JSON.stringify({ system: cleanParams.system, messages: cleanParams.messages }),
+            input_tokens,
+            output_tokens,
+            total_tokens,
+            latency_ms,
+            cost: getCost(model, input_tokens, output_tokens),
+            status_success: true,
+            output_code: extractOutputCode(response),
+          });
+        }).catch((err: unknown) => {
+          const latency_ms = Date.now() - start;
+          tracer.ingest({
+            run_id: tracer.runId,
+            step_name: stepName,
+            step_index: currentStep,
+            model: cleanParams.model,
+            prompt: JSON.stringify({ system: cleanParams.system, messages: cleanParams.messages }),
+            input_tokens: 0,
+            output_tokens: 0,
+            total_tokens: 0,
+            latency_ms,
+            cost: 0,
+            status_success: false,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+
+        return messageStream;
       },
     },
 

@@ -114,6 +114,51 @@ async function triggerL3Shape() {
   return runId;
 }
 
+// Cascade failure: malformed JSON output in step 1 propagates silently, stalls step 2,
+// then causes a hard crash in step 3.
+//   Step 1 parse-request:    2001(50) + 3011(25) = 75pts  → warning, sub-threshold
+//   Step 2 enrich-context:   4007(20)             = 20pts  → warning, sub-threshold
+//   Step 3 generate-response: 1001(100)+1002(100) = 200pts → critical
+// AI analysis should identify step 1's malformed output as the true root cause.
+async function triggerCascade() {
+  const runId = crypto.randomUUID();
+
+  // Step 1 — returns malformed JSON (unclosed bracket, missing closing `}` and `]`)
+  await tracer.ingest({
+    run_id: runId, step_name: 'parse-request', step_index: 0,
+    model: 'claude-haiku-4-5-20251001',
+    prompt: 'Extract the intent and entity list. Respond in JSON: {"intent": string, "entities": string[], "confidence": number}',
+    input_tokens: 32, output_tokens: 26, total_tokens: 58,
+    latency_ms: 390, cost: 0.0003,
+    status_success: true,
+    output_code: '{"intent": "billing", "entities": ["account_id", "invoice_num"',
+  });
+
+  // Step 2 — receives the malformed output as input; stalls (high latency, near-zero output)
+  await tracer.ingest({
+    run_id: runId, step_name: 'enrich-context', step_index: 1,
+    model: 'claude-haiku-4-5-20251001',
+    prompt: 'Enrich these entities with account metadata. Input from previous step: {"intent": "billing", "entities": ["account_id", "invoice_num"',
+    input_tokens: 48, output_tokens: 3, total_tokens: 51,
+    latency_ms: 6400, cost: 0.0002,
+    status_success: true,
+    output_code: 'null',
+  });
+
+  // Step 3 — hard failure: can't use the corrupted entity list
+  await tracer.ingest({
+    run_id: runId, step_name: 'generate-response', step_index: 2,
+    model: 'claude-haiku-4-5-20251001',
+    prompt: 'Generate a personalised billing response using the enriched entity data.',
+    input_tokens: 0, output_tokens: 0, total_tokens: 0,
+    latency_ms: 90, cost: 0,
+    status_success: false,
+    error: 'TypeError: Cannot read properties of null — entity list was malformed JSON from parse-request',
+  });
+
+  return runId;
+}
+
 // L4 only: stall pattern — high latency + almost no output
 // → codes 4007 (20) + 4009 (15) = 35pts, warning only (below threshold)
 async function triggerL4Stall() {
@@ -128,6 +173,23 @@ async function triggerL4Stall() {
     output_code: 'ok',
   });
   return runId;
+}
+
+async function triggerStream() {
+  const run = anthropic.run();
+  let fullText = '';
+  const stream = run.messages.stream({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 256,
+    messages: [{ role: 'user', content: 'Write a haiku about distributed tracing.' }],
+    _trace: { stepName: 'streamed-haiku' },
+  });
+  for await (const event of stream as AsyncIterable<{ type: string; delta?: { type: string; text?: string } }>) {
+    if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+      fullText += event.delta.text ?? '';
+    }
+  }
+  return { runId: run.runId, text: fullText };
 }
 
 async function runWorkflow(message: string, history: HistoryItem[]) {
@@ -160,6 +222,25 @@ async function runWorkflow(message: string, history: HistoryItem[]) {
   if (message.trim() === '!l4') {
     const runId = await triggerL4Stall();
     return { reply: `L4 stall: 9.5s latency, only 3 output tokens — stall/hang signature.\nCodes: 4007(20) + 4009(15) = 35pts → warning (below threshold).\nRun: ${runId}`, intent: 'technical', context: '', runId };
+  }
+
+  // !stream — single streamed call, tokens captured after stream completes
+  if (message.trim() === '!stream') {
+    const { runId, text: haiku } = await triggerStream();
+    return {
+      reply: `Streamed response (tokens captured after finalMessage()):\n\n${haiku}\n\nRun: ${runId}`,
+      intent: 'technical', context: '', runId,
+    };
+  }
+
+  // !cascade — 3-step pipeline where step 1 malformed JSON silently propagates
+  //            to crash step 3; tests whether analysis traces the root cause back
+  if (message.trim() === '!cascade') {
+    const runId = await triggerCascade();
+    return {
+      reply: `Cascade failure injected (3 steps):\n  parse-request → 75pts warning (malformed JSON)\n  enrich-context → 20pts warning (stall)\n  generate-response → 200pts critical (hard crash)\nOpen the run in trace.ai and click Analyze to see if it finds the root cause.\nRun: ${runId}`,
+      intent: 'technical', context: '', runId,
+    };
   }
 
   // !spike — fire 6 error calls to trigger the error rate alert
@@ -463,6 +544,8 @@ const HTML = /* html */`<!DOCTYPE html>
     <button class="suggestion error-cmd" onclick="fillInput(this)" title="L2+L3+L4: classify shape mismatch → 2003+3014+4005+4006, critical">!l3</button>
     <button class="suggestion error-cmd" onclick="fillInput(this)" title="L4 only: stall pattern → 4007+4009, warning">!l4</button>
     <button class="suggestion error-cmd" onclick="fillInput(this)" title="Fire 6 errors to spike the error rate alert">!spike</button>
+    <button class="suggestion error-cmd" onclick="fillInput(this)" title="3-step cascade: malformed JSON in step 1 silently propagates and crashes step 3">!cascade</button>
+    <button class="suggestion error-cmd" onclick="fillInput(this)" title="Single streaming call — tokens captured via finalMessage() after stream ends">!stream</button>
   </div>
   <div class="input-row">
     <textarea

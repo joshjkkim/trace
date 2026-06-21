@@ -6,10 +6,12 @@ from typing import Optional
 DASHBOARD_BASE = "http://localhost:3000"
 
 # Per-project cooldown so a burst of errors doesn't spam the channel
-_rate_cooldown: dict[int, float] = {}
-RATE_COOLDOWN_SEC   = 300   # 5 minutes between error-rate pings
-RATE_THRESHOLD      = 0.25  # 25% error rate triggers the alert
-RATE_WINDOW         = 20    # look at last N calls
+_rate_cooldown:    dict[int, float] = {}
+_anomaly_cooldown: dict[int, float] = {}
+RATE_COOLDOWN_SEC    = 300   # 5 minutes between error-rate pings
+ANOMALY_COOLDOWN_SEC = 60    # 1 minute between anomaly pings per project
+RATE_THRESHOLD       = 0.25  # 25% error rate triggers the alert
+RATE_WINDOW          = 20    # look at last N calls
 
 
 def _post(url: str, payload: dict) -> bool:
@@ -94,6 +96,61 @@ def send_rate_alert(
     ]
     return _post(webhook_url, {
         "text": f"⚠️ High error rate in {project_name}: {pct}%",
+        "blocks": blocks,
+    })
+
+
+def send_anomaly_alert(
+    webhook_url: str,
+    project_name: str,
+    project_id: int,
+    step_name: str,
+    run_id: str,
+    total_score: float,
+    error_map: dict,          # {code: penalty}
+    condition_names: dict,    # {code: name} from CONDITION_REGISTRY
+    triggered: bool,
+) -> bool:
+    now = time.time()
+    if _anomaly_cooldown.get(project_id, 0) > now - ANOMALY_COOLDOWN_SEC:
+        return False
+    _anomaly_cooldown[project_id] = now
+
+    emoji  = "🔴" if triggered else "🟡"
+    label  = "Critical anomaly" if triggered else "Anomaly warning"
+    codes_text = "\n".join(
+        f"`{code}` {condition_names.get(code, '')}  *+{int(pts)}pts*"
+        for code, pts in error_map.items()
+    )
+    blocks = [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": f"{emoji} {label} — {step_name}"},
+        },
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": f"*Project*\n{project_name}"},
+                {"type": "mrkdwn", "text": f"*Score*\n`{int(total_score)} pts`"},
+                {"type": "mrkdwn", "text": f"*Run*\n`{run_id[:16]}…`"},
+                {"type": "mrkdwn", "text": f"*Step*\n`{step_name}`"},
+            ],
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*Conditions fired*\n{codes_text}"},
+        },
+        {
+            "type": "actions",
+            "elements": [{
+                "type": "button",
+                "text": {"type": "plain_text", "text": "View Run →"},
+                "url": f"{DASHBOARD_BASE}/dashboard/{project_id}",
+            }],
+        },
+    ]
+    return _post(webhook_url, {
+        "text": f"{emoji} {label} in {project_name}: {step_name} scored {int(total_score)}pts",
         "blocks": blocks,
     })
 

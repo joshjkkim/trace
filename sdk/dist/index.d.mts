@@ -24,12 +24,21 @@ interface TracePayload {
     output_code?: string;
     error?: string;
 }
+/** Minimal shape we need from a streaming response — the real MessageStream satisfies this. */
+interface MessageStreamLike {
+    finalMessage(): Promise<Message>;
+    [Symbol.asyncIterator](): AsyncIterator<unknown>;
+}
 interface AnthropicClientLike {
     messages: {
         create(params: MessageCreateParamsNonStreaming, options?: unknown): Promise<Message>;
+        stream?(params: MessageCreateParamsNonStreaming, options?: unknown): MessageStreamLike;
     };
 }
 type TracedMessageParams = MessageCreateParamsNonStreaming & {
+    _trace?: TraceOptions;
+};
+type TracedStreamParams = MessageCreateParamsNonStreaming & {
     _trace?: TraceOptions;
 };
 
@@ -39,14 +48,17 @@ declare class TracedRun {
     readonly runId: string;
     readonly messages: {
         create(params: TracedMessageParams): Promise<Message>;
+        stream(params: TracedStreamParams): MessageStreamLike;
     };
     private stepIndex;
     constructor(client: AnthropicClientLike, tracer: Tracer);
     private _create;
+    private _stream;
 }
 
 interface TracedAnthropicMessages {
     create(params: TracedMessageParams): Promise<Message>;
+    stream(params: TracedStreamParams): MessageStreamLike;
 }
 interface TracedAnthropic {
     messages: TracedAnthropicMessages;
@@ -65,4 +77,4 @@ declare class Tracer {
 
 declare function getCost(model: string, inputTokens: number, outputTokens: number): number;
 
-export { type AnthropicClientLike, type TraceConfig, type TraceOptions, type TracePayload, type TracedAnthropic, type TracedMessageParams, TracedRun, Tracer, getCost };
+export { type AnthropicClientLike, type MessageStreamLike, type TraceConfig, type TraceOptions, type TracePayload, type TracedAnthropic, type TracedMessageParams, TracedRun, type TracedStreamParams, Tracer, getCost };
