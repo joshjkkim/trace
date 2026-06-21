@@ -211,6 +211,74 @@ def test_webhook(project_id: int) -> dict:
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@router.get("/{project_id}/thresholds")
+def get_thresholds(project_id: int) -> dict:
+    """Return current L4 anomaly thresholds for a project (dynamic or static)."""
+    try:
+        client = get_client()
+        res = (
+            client.table("CALLS")
+            .select("latency_ms,total_tokens,cost")
+            .eq("project_id", project_id)
+            .order("created_at", desc=True)
+            .limit(100)
+            .execute()
+        )
+        rows = res.data or []
+        call_count = len(rows)
+        min_calls = 30
+
+        static = {
+            "latency_ms_max": 10000.0,
+            "total_tokens_max": 50000.0,
+            "cost_max": 1.0,
+        }
+
+        if call_count < min_calls:
+            return {
+                "mode": "static",
+                "calls_used": call_count,
+                "calls_needed": min_calls - call_count,
+                "thresholds": static,
+            }
+
+        def stats(values: list[float]) -> tuple[float, float]:
+            n = len(values)
+            mean = sum(values) / n
+            stddev = (sum((v - mean) ** 2 for v in values) / n) ** 0.5
+            return mean, stddev
+
+        latencies = [r["latency_ms"] for r in rows if r.get("latency_ms") is not None]
+        tokens    = [r["total_tokens"] for r in rows if r.get("total_tokens") is not None]
+        costs     = [r["cost"] for r in rows if r.get("cost") is not None]
+
+        thresholds = dict(static)
+        baselines  = {}
+
+        if latencies:
+            m, s = stats(latencies)
+            thresholds["latency_ms_max"] = round(max(3000.0, m + 2 * s), 1)
+            baselines["latency_ms"] = {"mean": round(m, 1), "stddev": round(s, 1)}
+        if tokens:
+            m, s = stats(tokens)
+            thresholds["total_tokens_max"] = round(max(1000.0, m + 2 * s), 1)
+            baselines["total_tokens"] = {"mean": round(m, 1), "stddev": round(s, 1)}
+        if costs:
+            m, s = stats(costs)
+            thresholds["cost_max"] = round(max(0.05, m + 2 * s), 6)
+            baselines["cost"] = {"mean": round(m, 6), "stddev": round(s, 6)}
+
+        return {
+            "mode": "dynamic",
+            "calls_used": call_count,
+            "calls_needed": 0,
+            "thresholds": thresholds,
+            "baselines": baselines,
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @router.delete("/{project_id}")
 def delete_project(project_id: int) -> dict:
     """Delete a project"""

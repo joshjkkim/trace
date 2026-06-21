@@ -131,13 +131,64 @@ def _extract_instruction(prompt: str) -> str:
     return prompt
 
 
+def _dynamic_l4_limits(project_id: int) -> dict[str, float] | None:
+    """Compute per-project L4 limits from recent call history (mean + 2σ).
+    Returns None when fewer than 30 calls exist — caller falls back to static."""
+    try:
+        res = (
+            get_client()
+            .table("CALLS")
+            .select("latency_ms,total_tokens,cost")
+            .eq("project_id", project_id)
+            .order("created_at", desc=True)
+            .limit(100)
+            .execute()
+        )
+        rows = res.data or []
+        if len(rows) < 30:
+            return None
+
+        def stats(values: list[float]) -> tuple[float, float]:
+            n = len(values)
+            mean = sum(values) / n
+            stddev = (sum((v - mean) ** 2 for v in values) / n) ** 0.5
+            return mean, stddev
+
+        latencies = [r["latency_ms"] for r in rows if r.get("latency_ms") is not None]
+        tokens    = [r["total_tokens"] for r in rows if r.get("total_tokens") is not None]
+        costs     = [r["cost"] for r in rows if r.get("cost") is not None]
+
+        limits: dict[str, float] = {}
+        if latencies:
+            m, s = stats(latencies)
+            limits["latency_ms_max"] = max(3000.0, m + 2 * s)
+        if tokens:
+            m, s = stats(tokens)
+            limits["total_tokens_max"] = max(1000.0, m + 2 * s)
+        if costs:
+            m, s = stats(costs)
+            limits["cost_max"] = max(0.05, m + 2 * s)
+
+        return limits or None
+    except Exception as exc:
+        print(f"[anomaly] dynamic limits failed: {exc}")
+        return None
+
+
 def _run_anomaly_detection(payload: IngestPayload, project: dict | None) -> None:
     """Run in a background thread — score the call and persist any anomalies."""
     try:
+        from anomaly.config import EvalConfig
         call_input = CallInput.model_validate(
             {**payload.model_dump(), "prompt": _extract_instruction(payload.prompt)}
         )
-        result = evaluate_call(call_input)
+        config = EvalConfig()
+        if project:
+            dynamic = _dynamic_l4_limits(project["id"])
+            if dynamic:
+                config = EvalConfig(limits={**config.limits, **dynamic})
+                print(f"[anomaly] dynamic L4 limits for project {project['id']}: {dynamic}")
+        result = evaluate_call(call_input, config)
         print(f"[anomaly] run={payload.run_id} step={payload.step_name} score={result.total_score} triggered={result.triggered} layer={result.stopped_at_layer} codes={dict(result.error_map)}")
         if result.error_map:
             from schemas.anomaly import AnomalyInput

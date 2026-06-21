@@ -1049,6 +1049,87 @@ function AnomaliesTab({ runs, registry }: { runs: AnomalyRun[]; registry: Condit
 
 // ── Settings tab ──────────────────────────────────────────────────────────────
 
+interface ThresholdData {
+  mode: 'static' | 'dynamic';
+  calls_used: number;
+  calls_needed: number;
+  thresholds: { latency_ms_max: number; total_tokens_max: number; cost_max: number };
+  baselines?: {
+    latency_ms?: { mean: number; stddev: number };
+    total_tokens?: { mean: number; stddev: number };
+    cost?: { mean: number; stddev: number };
+  };
+}
+
+function BaselineSection({ projectId }: { projectId: number }) {
+  const [data, setData] = useState<ThresholdData | null>(null);
+  const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
+
+  useEffect(() => {
+    fetch(`${BACKEND}/projects/${projectId}/thresholds`)
+      .then(r => r.json())
+      .then(setData)
+      .catch(() => {});
+  }, [projectId, BACKEND]);
+
+  if (!data) return <div className="text-xs text-gray-600">Loading baseline…</div>;
+
+  const rows = [
+    {
+      label: 'Latency',
+      threshold: `${data.thresholds.latency_ms_max.toLocaleString()}ms`,
+      baseline: data.baselines?.latency_ms
+        ? `avg ${data.baselines.latency_ms.mean.toLocaleString()}ms ± ${data.baselines.latency_ms.stddev.toLocaleString()}ms`
+        : null,
+    },
+    {
+      label: 'Total tokens',
+      threshold: data.thresholds.total_tokens_max.toLocaleString(),
+      baseline: data.baselines?.total_tokens
+        ? `avg ${Math.round(data.baselines.total_tokens.mean).toLocaleString()} ± ${Math.round(data.baselines.total_tokens.stddev).toLocaleString()}`
+        : null,
+    },
+    {
+      label: 'Cost',
+      threshold: `$${data.thresholds.cost_max.toFixed(4)}`,
+      baseline: data.baselines?.cost
+        ? `avg $${data.baselines.cost.mean.toFixed(4)} ± $${data.baselines.cost.stddev.toFixed(4)}`
+        : null,
+    },
+  ];
+
+  return (
+    <div className="border border-gray-800 rounded-xl p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-gray-300">L4 anomaly baseline</h3>
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+          data.mode === 'dynamic'
+            ? 'bg-emerald-900/40 text-emerald-400'
+            : 'bg-gray-800 text-gray-500'
+        }`}>
+          {data.mode === 'dynamic' ? `dynamic · ${data.calls_used} calls` : `static · ${data.calls_needed} more calls to adapt`}
+        </span>
+      </div>
+      <p className="text-xs text-gray-600">
+        {data.mode === 'dynamic'
+          ? 'Thresholds are learned from your project\'s history (mean + 2σ). They adapt as new calls come in.'
+          : `Using static defaults until ${data.calls_needed} more calls are recorded.`}
+      </p>
+      <div className="space-y-2">
+        {rows.map(({ label, threshold, baseline }) => (
+          <div key={label} className="flex items-center justify-between text-sm">
+            <span className="text-gray-500">{label}</span>
+            <div className="text-right">
+              <span className="text-gray-200 font-mono text-xs">{threshold}</span>
+              {baseline && <div className="text-xs text-gray-600">{baseline}</div>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SettingsTab({ project }: { project: Project }) {
   const [url, setUrl] = useState(project.slack_webhook_url ?? '');
   const [alertOnError, setAlertOnError] = useState(project.alert_on_error ?? true);
@@ -1267,6 +1348,8 @@ function SettingsTab({ project }: { project: Project }) {
           </p>
         </div>
       </div>
+
+      <BaselineSection projectId={project.id} />
 
       {/* Save — covers everything above */}
       {msg && (
