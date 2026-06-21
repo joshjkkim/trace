@@ -1,13 +1,14 @@
 from fastapi import FastAPI, HTTPException
-
 from db import check_connection
-from routers import ingest, traces
+from routers import ingest, traces, projects, calls  # ADD THIS
 
 app = FastAPI(title="Trace API", version="0.1.0")
 
 app.include_router(ingest.router)
 app.include_router(traces.router)
-
+app.include_router(traces.runs_router)
+app.include_router(projects.router)      # ADD THIS
+app.include_router(calls.router)         # ADD THIS
 
 @app.get("/health")
 def health() -> dict:
