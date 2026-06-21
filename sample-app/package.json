@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "chatbot": "INGEST_URL=http://localhost:8000 tsx chatbot.ts",
     "demo": "tsx demo.ts",
     "seed": "tsx seed.ts",
     "seed:dry": "tsx seed.ts --dry-run"

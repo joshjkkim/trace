@@ -50,15 +50,17 @@ async function main() {
   console.log(`\nIngest endpoint: ${INGEST_URL}/ingest`);
   console.log(`\n═══ CHAINED WORKFLOW ═══\n`);
 
-  const tracer = new Tracer({ apiKey: 'demo-key', apiUrl: INGEST_URL });
-  const client = tracer.wrapAnthropic(new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }));
+  const tracer = new Tracer({ apiKey: 'trace_0AP1EwLHOHADG4WjrUyneCDBUszA6lbn', apiUrl: INGEST_URL });
+  const anthropic = tracer.wrapAnthropic(new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }));
 
-  console.log(`run_id: ${tracer.runId}\n`);
+  // One run per chatbot turn — fresh run_id, step_index resets to 0
+  const run = anthropic.run();
+  console.log(`run_id: ${run.runId}\n`);
 
-  // Step 1 — classify
+  // Step 1 — classify (step_index: 0)
   console.log('[1/3] classify-intent');
   let t = Date.now();
-  const classifyRes = await client.messages.create({
+  const classifyRes = await run.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 16,
     messages: [{ role: 'user', content: 'Classify as "billing" or "support": "I need help with my bill"' }],
@@ -68,10 +70,10 @@ async function main() {
   printTrace('classify-intent', classifyRes, Date.now() - t);
   console.log(`  output    "${intent}"\n`);
 
-  // Step 2 — draft (uses step 1 output)
+  // Step 2 — draft (step_index: 1)
   console.log('[2/3] draft-reply');
   t = Date.now();
-  const draftRes = await client.messages.create({
+  const draftRes = await run.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 128,
     messages: [
@@ -85,10 +87,10 @@ async function main() {
   printTrace('draft-reply', draftRes, Date.now() - t);
   console.log(`  output    "${draft.slice(0, 80)}…"\n`);
 
-  // Step 3 — proofread (uses step 2 output)
+  // Step 3 — proofread (step_index: 2)
   console.log('[3/3] proofread');
   t = Date.now();
-  const proofRes = await client.messages.create({
+  const proofRes = await run.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 32,
     messages: [{ role: 'user', content: `Any grammar issues? Reply "ok" or describe:\n\n"${draft}"` }],
@@ -97,10 +99,10 @@ async function main() {
   printTrace('proofread', proofRes, Date.now() - t);
   console.log(`  output    "${extractText(proofRes).trim()}"\n`);
 
-  // Error path
+  // Error path (step_index: 3)
   console.log('[+] bad-model-call  (error path)');
   try {
-    await client.messages.create({
+    await run.messages.create({
       model: 'claude-does-not-exist',
       max_tokens: 16,
       messages: [{ role: 'user', content: 'Hello' }],

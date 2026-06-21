@@ -14,24 +14,28 @@ export class Tracer {
   private readonly apiUrl: string;
   private readonly apiKey: string;
   readonly runId: string;
-  readonly projectId: number | undefined;
 
   constructor(config: TraceConfig) {
     this.apiUrl = (config.apiUrl ?? DEFAULT_API_URL).replace(/\/$/, '');
     this.apiKey = config.apiKey;
     this.runId = config.runId ?? uuid();
-    this.projectId = config.projectId;
   }
 
-  ingest(payload: TracePayload): void {
-    fetch(`${this.apiUrl}/ingest`, {
+  ingest(payload: TracePayload): Promise<string | null> {
+    return fetch(`${this.apiUrl}/ingest`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify(payload),
-    }).catch((err: unknown) => console.warn('[trace-ai] ingest failed:', err));
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+      .then((data: { trace_id: string }) => data.trace_id ?? null)
+      .catch((err: unknown) => {
+        console.warn('[trace-ai] ingest failed:', err);
+        return null;
+      });
   }
 
   wrapAnthropic(client: AnthropicClientLike): TracedAnthropic {

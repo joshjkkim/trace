@@ -19,6 +19,7 @@ def ingest_trace(payload: IngestPayload) -> str:
         "error":           payload.error,
         "output_code":     payload.output_code,
         "run_id":          payload.run_id,
+        "step_index":      payload.step_index,
         "project_id":      payload.project_id,
     }
     # Remove None values so Supabase uses column defaults
@@ -138,5 +139,6 @@ def _row_to_trace(row: dict) -> TraceRecord:
         error=row.get("error"),
         output_code=row.get("output_code"),
         run_id=row["run_id"],
+        step_index=row.get("step_index"),
         project_id=row.get("project_id"),
     )

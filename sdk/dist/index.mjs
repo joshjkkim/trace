@@ -17,18 +17,89 @@ function getCost(model, inputTokens, outputTokens) {
   return inputTokens / 1e6 * pricing.inputPer1M + outputTokens / 1e6 * pricing.outputPer1M;
 }
 
-// src/wrappers/anthropic.ts
+// src/run.ts
+function uuid() {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    return (c === "x" ? r : r & 3 | 8).toString(16);
+  });
+}
 function extractOutputCode(response) {
   const text = response.content.filter((b) => b.type === "text").map((b) => b.text).join("");
   return text.length > 0 ? text : void 0;
 }
+var TracedRun = class {
+  constructor(client, tracer) {
+    this.client = client;
+    this.tracer = tracer;
+    this.stepIndex = 0;
+    this.runId = uuid();
+    this.messages = { create: (params) => this._create(params) };
+  }
+  async _create(params) {
+    const { _trace, ...cleanParams } = params;
+    const currentStep = this.stepIndex++;
+    const stepName = _trace?.stepName ?? `step_${currentStep + 1}`;
+    const start = Date.now();
+    try {
+      const response = await this.client.messages.create(
+        cleanParams
+      );
+      const latency_ms = Date.now() - start;
+      const input_tokens = response.usage?.input_tokens ?? 0;
+      const output_tokens = response.usage?.output_tokens ?? 0;
+      const total_tokens = input_tokens + output_tokens;
+      const model = response.model ?? cleanParams.model;
+      this.tracer.ingest({
+        run_id: this.runId,
+        step_name: stepName,
+        step_index: currentStep,
+        model,
+        prompt: JSON.stringify({ system: cleanParams.system, messages: cleanParams.messages }),
+        input_tokens,
+        output_tokens,
+        total_tokens,
+        latency_ms,
+        cost: getCost(model, input_tokens, output_tokens),
+        status_success: true,
+        output_code: extractOutputCode(response)
+      });
+      return response;
+    } catch (err) {
+      const latency_ms = Date.now() - start;
+      const message = err instanceof Error ? err.message : String(err);
+      this.tracer.ingest({
+        run_id: this.runId,
+        step_name: stepName,
+        step_index: currentStep,
+        model: cleanParams.model,
+        prompt: JSON.stringify({ system: cleanParams.system, messages: cleanParams.messages }),
+        input_tokens: 0,
+        output_tokens: 0,
+        total_tokens: 0,
+        latency_ms,
+        cost: 0,
+        status_success: false,
+        error: message
+      });
+      throw err;
+    }
+  }
+};
+
+// src/wrappers/anthropic.ts
+function extractOutputCode2(response) {
+  const text = response.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+  return text.length > 0 ? text : void 0;
+}
 function wrapAnthropic(client, tracer) {
+  let stepIndex = 0;
   return {
     messages: {
       async create(params) {
         const { _trace, ...cleanParams } = params;
-        const stepName = _trace?.stepName ?? "anthropic.messages.create";
-        const projectId = _trace?.projectId ?? tracer.projectId;
+        const currentStep = stepIndex++;
+        const stepName = _trace?.stepName ?? `step_${currentStep + 1}`;
         const start = Date.now();
         try {
           const response = await client.messages.create(
@@ -42,6 +113,7 @@ function wrapAnthropic(client, tracer) {
           tracer.ingest({
             run_id: tracer.runId,
             step_name: stepName,
+            step_index: currentStep,
             model,
             prompt: JSON.stringify({ system: cleanParams.system, messages: cleanParams.messages }),
             input_tokens,
@@ -50,8 +122,7 @@ function wrapAnthropic(client, tracer) {
             latency_ms,
             cost: getCost(model, input_tokens, output_tokens),
             status_success: true,
-            output_code: extractOutputCode(response),
-            project_id: projectId
+            output_code: extractOutputCode2(response)
           });
           return response;
         } catch (err) {
@@ -60,6 +131,7 @@ function wrapAnthropic(client, tracer) {
           tracer.ingest({
             run_id: tracer.runId,
             step_name: stepName,
+            step_index: currentStep,
             model: cleanParams.model,
             prompt: JSON.stringify({ system: cleanParams.system, messages: cleanParams.messages }),
             input_tokens: 0,
@@ -68,18 +140,20 @@ function wrapAnthropic(client, tracer) {
             latency_ms,
             cost: 0,
             status_success: false,
-            project_id: projectId,
             error: message
           });
           throw err;
         }
       }
+    },
+    run() {
+      return new TracedRun(client, tracer);
     }
   };
 }
 
 // src/tracer.ts
-function uuid() {
+function uuid2() {
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     const r = Math.random() * 16 | 0;
     return (c === "x" ? r : r & 3 | 8).toString(16);
@@ -90,24 +164,27 @@ var Tracer = class {
   constructor(config) {
     this.apiUrl = (config.apiUrl ?? DEFAULT_API_URL).replace(/\/$/, "");
     this.apiKey = config.apiKey;
-    this.runId = config.runId ?? uuid();
-    this.projectId = config.projectId;
+    this.runId = config.runId ?? uuid2();
   }
   ingest(payload) {
-    fetch(`${this.apiUrl}/ingest`, {
+    return fetch(`${this.apiUrl}/ingest`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${this.apiKey}`
       },
       body: JSON.stringify(payload)
-    }).catch((err) => console.warn("[trace-ai] ingest failed:", err));
+    }).then((res) => res.ok ? res.json() : Promise.reject(res.status)).then((data) => data.trace_id ?? null).catch((err) => {
+      console.warn("[trace-ai] ingest failed:", err);
+      return null;
+    });
   }
   wrapAnthropic(client) {
     return wrapAnthropic(client, this);
   }
 };
 export {
+  TracedRun,
   Tracer,
   getCost
 };

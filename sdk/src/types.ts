@@ -1,12 +1,15 @@
+import type {
+  Message,
+  MessageCreateParamsNonStreaming,
+} from '@anthropic-ai/sdk/resources/messages';
+
 export interface TraceOptions {
   stepName?: string;
-  projectId?: number;
 }
 
 export interface TraceConfig {
   apiKey: string;
   runId?: string;
-  projectId?: number;
   /** Override the ingest endpoint. Defaults to trace-ai's servers. For local dev only. */
   apiUrl?: string;
 }
@@ -14,6 +17,7 @@ export interface TraceConfig {
 export interface TracePayload {
   run_id: string;
   step_name: string;
+  step_index: number;
   model: string;
   prompt: string;
   input_tokens: number;
@@ -23,6 +27,15 @@ export interface TracePayload {
   cost: number;
   status_success: boolean;
   output_code?: string;
-  project_id?: number;
   error?: string;
 }
+
+export interface AnthropicClientLike {
+  messages: {
+    create(params: MessageCreateParamsNonStreaming, options?: unknown): Promise<Message>;
+  };
+}
+
+export type TracedMessageParams = MessageCreateParamsNonStreaming & {
+  _trace?: TraceOptions;
+};

@@ -18,6 +18,7 @@ class IngestPayload(BaseModel):
     error: str | None = None
     output_code: str | None = None
     run_id: str
+    step_index: int | None = None
     project_id: int | None = None
 
 
@@ -42,6 +43,7 @@ class TraceRecord(BaseModel):
     error: str | None = None
     output_code: str | None = None
     run_id: str
+    step_index: int | None = None
     project_id: int | None = None
 
 

@@ -36,7 +36,7 @@ export default function AuthForm() {
     try {
       if (mode === 'signup') {
         const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
-        console.log('[auth] signUp data:', data, 'error:', signUpError, 'status:', (signUpError as Record<string,unknown>)?.status);
+        console.log('[auth] signUp data:', data, 'error:', signUpError, 'status:', (signUpError as unknown as Record<string,unknown>)?.status);
         if (signUpError) throw signUpError;
       } else {
         const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });

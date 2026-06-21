@@ -1,0 +1,112 @@
+import json
+import time
+from urllib.request import urlopen, Request as UrlRequest
+from typing import Optional
+
+DASHBOARD_BASE = "http://localhost:3000"
+
+# Per-project cooldown so a burst of errors doesn't spam the channel
+_rate_cooldown: dict[int, float] = {}
+RATE_COOLDOWN_SEC   = 300   # 5 minutes between error-rate pings
+RATE_THRESHOLD      = 0.25  # 25% error rate triggers the alert
+RATE_WINDOW         = 20    # look at last N calls
+
+
+def _post(url: str, payload: dict) -> bool:
+    try:
+        data = json.dumps(payload).encode()
+        req = UrlRequest(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+        with urlopen(req, timeout=5) as resp:
+            return resp.status == 200
+    except Exception as exc:
+        print(f"[slack] webhook failed: {exc}")
+        return False
+
+
+def send_error_alert(
+    webhook_url: str,
+    project_name: str,
+    project_id: int,
+    step_name: str,
+    model: str,
+    error: str,
+    run_id: str,
+) -> bool:
+    blocks = [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": f"🚨 Error — {step_name}"},
+        },
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": f"*Project*\n{project_name}"},
+                {"type": "mrkdwn", "text": f"*Model*\n`{model}`"},
+                {"type": "mrkdwn", "text": f"*Error*\n{error[:200]}"},
+                {"type": "mrkdwn", "text": f"*Run*\n`{run_id[:16]}…`"},
+            ],
+        },
+        {
+            "type": "actions",
+            "elements": [{
+                "type": "button",
+                "text": {"type": "plain_text", "text": "View Trace →"},
+                "url": f"{DASHBOARD_BASE}/dashboard/{project_id}",
+            }],
+        },
+    ]
+    return _post(webhook_url, {
+        "text": f"🚨 Error in {project_name}: {step_name}",
+        "blocks": blocks,
+    })
+
+
+def send_rate_alert(
+    webhook_url: str,
+    project_name: str,
+    project_id: int,
+    error_rate: float,
+    window: int,
+) -> bool:
+    now = time.time()
+    if _rate_cooldown.get(project_id, 0) > now - RATE_COOLDOWN_SEC:
+        return False  # still cooling down
+    _rate_cooldown[project_id] = now
+
+    pct = int(error_rate * 100)
+    blocks = [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": f"⚠️ High error rate — {project_name}"},
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*{pct}% error rate* across the last {window} calls"},
+        },
+        {
+            "type": "actions",
+            "elements": [{
+                "type": "button",
+                "text": {"type": "plain_text", "text": "View Dashboard →"},
+                "url": f"{DASHBOARD_BASE}/dashboard/{project_id}",
+            }],
+        },
+    ]
+    return _post(webhook_url, {
+        "text": f"⚠️ High error rate in {project_name}: {pct}%",
+        "blocks": blocks,
+    })
+
+
+def send_test_alert(webhook_url: str, project_name: str) -> bool:
+    blocks = [{
+        "type": "section",
+        "text": {
+            "type": "mrkdwn",
+            "text": f"✅ *trace.ai webhook connected*\nAlerts for *{project_name}* will appear here.",
+        },
+    }]
+    return _post(webhook_url, {
+        "text": f"✅ trace.ai connected to {project_name}",
+        "blocks": blocks,
+    })

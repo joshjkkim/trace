@@ -1,20 +1,10 @@
-import type {
-  Message,
-  MessageCreateParamsNonStreaming,
-} from '@anthropic-ai/sdk/resources/messages';
+import type { Message, MessageCreateParamsNonStreaming } from '@anthropic-ai/sdk/resources/messages';
 import type { Tracer } from '../tracer';
-import type { TraceOptions } from '../types';
+import type { AnthropicClientLike, TracedMessageParams } from '../types';
 import { getCost } from '../cost';
+import { TracedRun } from '../run';
 
-export interface AnthropicClientLike {
-  messages: {
-    create(params: MessageCreateParamsNonStreaming, options?: unknown): Promise<Message>;
-  };
-}
-
-export type TracedMessageParams = MessageCreateParamsNonStreaming & {
-  _trace?: TraceOptions;
-};
+export type { AnthropicClientLike, TracedMessageParams };
 
 export interface TracedAnthropicMessages {
   create(params: TracedMessageParams): Promise<Message>;
@@ -22,6 +12,8 @@ export interface TracedAnthropicMessages {
 
 export interface TracedAnthropic {
   messages: TracedAnthropicMessages;
+  /** Start a new run — fresh run_id, step_index resets to 0. */
+  run(): TracedRun;
 }
 
 function extractOutputCode(response: Message): string | undefined {
@@ -33,13 +25,15 @@ function extractOutputCode(response: Message): string | undefined {
 }
 
 export function wrapAnthropic(client: AnthropicClientLike, tracer: Tracer): TracedAnthropic {
+  let stepIndex = 0;
+
   return {
     messages: {
       async create(params: TracedMessageParams): Promise<Message> {
         const { _trace, ...cleanParams } = params;
-        const stepName  = _trace?.stepName  ?? 'anthropic.messages.create';
-        const projectId = _trace?.projectId ?? tracer.projectId;
-        const start     = Date.now();
+        const currentStep = stepIndex++;
+        const stepName = _trace?.stepName ?? `step_${currentStep + 1}`;
+        const start = Date.now();
 
         try {
           const response = await client.messages.create(
@@ -55,6 +49,7 @@ export function wrapAnthropic(client: AnthropicClientLike, tracer: Tracer): Trac
           tracer.ingest({
             run_id: tracer.runId,
             step_name: stepName,
+            step_index: currentStep,
             model,
             prompt: JSON.stringify({ system: cleanParams.system, messages: cleanParams.messages }),
             input_tokens,
@@ -64,7 +59,6 @@ export function wrapAnthropic(client: AnthropicClientLike, tracer: Tracer): Trac
             cost: getCost(model, input_tokens, output_tokens),
             status_success: true,
             output_code: extractOutputCode(response),
-            project_id: projectId,
           });
 
           return response;
@@ -75,6 +69,7 @@ export function wrapAnthropic(client: AnthropicClientLike, tracer: Tracer): Trac
           tracer.ingest({
             run_id: tracer.runId,
             step_name: stepName,
+            step_index: currentStep,
             model: cleanParams.model,
             prompt: JSON.stringify({ system: cleanParams.system, messages: cleanParams.messages }),
             input_tokens: 0,
@@ -83,13 +78,16 @@ export function wrapAnthropic(client: AnthropicClientLike, tracer: Tracer): Trac
             latency_ms,
             cost: 0,
             status_success: false,
-            project_id: projectId,
             error: message,
           });
 
           throw err;
         }
       },
+    },
+
+    run(): TracedRun {
+      return new TracedRun(client, tracer);
     },
   };
 }
