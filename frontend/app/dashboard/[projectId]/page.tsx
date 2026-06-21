@@ -304,17 +304,17 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
   return (
     <main className="min-h-screen bg-gray-950 text-gray-100">
       {/* Top bar */}
-      <div className="border-b border-gray-800 px-8 py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div>
+      <div className="border-b border-gray-800 px-4 sm:px-8 py-4">
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
+          <div className="min-w-0">
             <div className="flex items-center gap-2 text-sm">
-              <a href="/dashboard" className="text-gray-500 hover:text-gray-300 transition-colors">Projects</a>
+              <a href="/dashboard" className="text-gray-500 hover:text-gray-300 transition-colors shrink-0">Projects</a>
               <span className="text-gray-700">/</span>
-              <span className="text-gray-100 font-medium">{project.name}</span>
+              <span className="text-gray-100 font-medium truncate">{project.name}</span>
             </div>
             <div className="flex items-center gap-2 mt-1">
               <span className={[
-                'w-1.5 h-1.5 rounded-full',
+                'w-1.5 h-1.5 rounded-full shrink-0',
                 status === 'connected'  ? 'bg-green-400' : '',
                 status === 'connecting' ? 'bg-yellow-400 animate-pulse' : '',
                 status === 'error'      ? 'bg-red-500' : '',
@@ -324,19 +324,19 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
               </span>
             </div>
           </div>
-          <code className="text-xs text-green-400 font-mono bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 max-w-xs truncate">
+          <code className="hidden sm:block text-xs text-green-400 font-mono bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 max-w-[200px] truncate shrink-0">
             {project.API_KEY}
           </code>
         </div>
 
         {/* Tab bar */}
-        <div className="max-w-6xl mx-auto flex gap-1 mt-4">
+        <div className="max-w-6xl mx-auto flex gap-0.5 mt-4 overflow-x-auto scrollbar-none -mb-px">
           {TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => { setTab(t.id); setSelectedRunId(null); }}
               className={[
-                'px-4 py-1.5 text-sm font-medium rounded-t -mb-px border-b-2 transition-colors',
+                'px-3 py-1.5 text-xs sm:text-sm font-medium rounded-t border-b-2 transition-colors whitespace-nowrap shrink-0',
                 tab === t.id
                   ? 'border-indigo-400 text-indigo-300'
                   : 'border-transparent text-gray-500 hover:text-gray-300',
@@ -348,7 +348,7 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-8 py-6">
+      <div className="max-w-6xl mx-auto px-4 sm:px-8 py-6">
 
         {/* ── Overview ── */}
         {tab === 'overview' && <OverviewTab calls={calls} />}
@@ -406,11 +406,11 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
             >
               ← Runs
             </button>
-            <div className="mb-6 flex items-start justify-between gap-4">
-              <div>
+            <div className="mb-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+              <div className="min-w-0">
                 <p className="text-xs text-gray-500 mb-1">Run ID</p>
-                <code className="text-sm font-mono text-gray-300">{selectedRun.runId}</code>
-                <div className="flex gap-4 mt-2 text-xs text-gray-500">
+                <code className="text-sm font-mono text-gray-300 break-all">{selectedRun.runId}</code>
+                <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-500">
                   <span>{selectedRun.steps.length} steps</span>
                   <span>${selectedRun.totalCost.toFixed(6)}</span>
                   <span>{selectedRun.totalLatency}ms total</span>
@@ -692,7 +692,7 @@ function CallRow({ call, anomaly, onSelect }: { call: Call; anomaly?: AnomalyRun
         </div>
         {isError && call.error && <div className="text-red-400 truncate">{call.error}</div>}
         {!isError && (
-          <div className="flex gap-4 text-gray-400">
+          <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-gray-400">
             <span><span className="text-gray-600">tokens </span>{call.input_tokens ?? 0} / {call.output_tokens ?? 0}</span>
             {call.cost != null && <span><span className="text-gray-600">cost </span>${Number(call.cost).toFixed(6)}</span>}
           </div>
@@ -733,11 +733,11 @@ function RunCard({ run, anomaly, onClick }: { run: Run; anomaly?: AnomalyRun; on
             )}
             <code className="text-xs font-mono text-gray-400">{run.runId.slice(0, 16)}…</code>
           </div>
-          <div className="flex gap-4 text-xs text-gray-500">
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
             <span>{run.steps.length} step{run.steps.length !== 1 ? 's' : ''}</span>
             <span>${run.totalCost.toFixed(6)}</span>
             <span>{run.totalLatency}ms</span>
-            <span>{run.totalTokens.toLocaleString()} tokens</span>
+            <span>{run.totalTokens.toLocaleString()} tok</span>
           </div>
           <div className="flex gap-1 flex-wrap">
             {run.steps.map((s) => (
@@ -799,7 +799,7 @@ function CallDetailDrawer({ call, onClose, anomalyStep, registry }: {
   return (
     <>
       <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
-      <div className="fixed right-0 top-0 h-full w-[520px] bg-gray-950 border-l border-gray-800 z-50 flex flex-col">
+      <div className="fixed right-0 top-0 h-full w-full sm:w-[520px] bg-gray-950 border-l border-gray-800 z-50 flex flex-col">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 shrink-0">
@@ -1204,7 +1204,7 @@ function UsageTab({ project }: { project: Project }) {
   return (
     <div className="space-y-6">
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-gray-900 border border-gray-800 rounded-xl px-5 py-4">
           <div className="text-2xl font-semibold text-gray-100">${data.month_cost_usd.toFixed(4)}</div>
           <div className="text-xs text-gray-500 mt-1">This month</div>

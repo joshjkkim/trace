@@ -140,7 +140,7 @@ export default function Dashboard() {
         ) : (
           <>
             {/* Summary strip */}
-            <div className="grid grid-cols-3 gap-4 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
               {[
                 { label: 'Total calls', value: totalCalls.toLocaleString() },
                 { label: 'Errors', value: totalErrors.toLocaleString(), dim: totalErrors === 0 },
