@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "chatbot": "tsx chatbot.ts",
+    "chatbot-demo": "tsx chatbot-demo.ts",
     "demo": "tsx demo.ts",
     "seed": "tsx seed.ts",
     "seed:dry": "tsx seed.ts --dry-run"

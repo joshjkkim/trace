@@ -21,7 +21,7 @@ loadEnv();
 
 const PORT       = 3001;
 const INGEST_URL = process.env.INGEST_URL ?? 'https://trace-production-940c.up.railway.app';
-const API_KEY    = process.env.TRACE_API_KEY ?? 'trace_BUaC3l1k0GL09KYlwOpaXKs4e9nzQ16h';
+const API_KEY    = process.env.TRACE_API_KEY ?? 'trace_dZrPGhyT0bXXwlIc0nzi2pWtf9LuApeL';
 
 if (!process.env.ANTHROPIC_API_KEY) {
   console.error('Missing ANTHROPIC_API_KEY — set it in .env.local');
