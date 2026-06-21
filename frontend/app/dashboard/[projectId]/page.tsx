@@ -1071,7 +1071,7 @@ function SettingsTab({ project }: { project: Project }) {
     setSaving(true);
     setMsg(null);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'}/projects/${project.id}/webhook`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000'}/projects/${project.id}/webhook`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1097,7 +1097,7 @@ function SettingsTab({ project }: { project: Project }) {
     setTesting(true);
     setMsg(null);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'}/projects/${project.id}/webhook/test`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000'}/projects/${project.id}/webhook/test`, {
         method: 'POST',
       });
       if (!res.ok) throw new Error(await res.text());

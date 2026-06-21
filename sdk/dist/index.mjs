@@ -258,7 +258,7 @@ function uuid2() {
     return (c === "x" ? r : r & 3 | 8).toString(16);
   });
 }
-var DEFAULT_API_URL = "https://ingest.trace-ai.com";
+var DEFAULT_API_URL = "https://trace-production-940c.up.railway.app";
 var Tracer = class {
   constructor(config) {
     this.apiUrl = (config.apiUrl ?? DEFAULT_API_URL).replace(/\/$/, "");

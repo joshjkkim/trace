@@ -20,7 +20,7 @@ loadEnv({ path: '.env.local' });
 loadEnv();
 
 const PORT       = 3001;
-const INGEST_URL = process.env.INGEST_URL ?? 'http://localhost:8000';
+const INGEST_URL = process.env.INGEST_URL ?? 'https://trace-production-940c.up.railway.app';
 const API_KEY    = process.env.TRACE_API_KEY ?? 'trace_BUaC3l1k0GL09KYlwOpaXKs4e9nzQ16h';
 
 if (!process.env.ANTHROPIC_API_KEY) {

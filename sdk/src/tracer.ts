@@ -8,7 +8,7 @@ function uuid(): string {
   });
 }
 
-const DEFAULT_API_URL = 'https://ingest.trace-ai.com';
+const DEFAULT_API_URL = 'https://trace-production-940c.up.railway.app';
 
 export class Tracer {
   private readonly apiUrl: string;

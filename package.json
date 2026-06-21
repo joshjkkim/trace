@@ -5,7 +5,7 @@
     "backend":  "cd backend && .venv/bin/uvicorn main:app --reload --port 8000",
     "frontend": "cd frontend && npm run dev",
     "demo":     "cd sample-app && INGEST_URL=http://localhost:8000 npm run demo",
-    "chatbot":  "cd sample-app && INGEST_URL=http://localhost:8000 npm run chatbot",
+    "chatbot":  "cd sample-app && npm run chatbot",
     "seed":     "cd sample-app && INGEST_URL=http://localhost:8000 npm run seed"
   }
 }
