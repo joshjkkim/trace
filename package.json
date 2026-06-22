@@ -2,10 +2,15 @@
   "name": "trace-ai",
   "private": true,
   "scripts": {
-    "backend":  "cd backend && .venv/bin/uvicorn main:app --reload --port 8000",
+    "dev": "concurrently --names sdk,backend,frontend --prefix-colors cyan,yellow,magenta \"npm run sdk:watch\" \"npm run backend\" \"npm run frontend\"",
+    "sdk:watch": "cd sdk && npm run dev",
+    "backend": "cd backend && .venv/bin/uvicorn main:app --reload --port 8000",
     "frontend": "cd frontend && npm run dev",
-    "demo":     "cd sample-app && INGEST_URL=http://localhost:8000 npm run demo",
-    "chatbot":  "cd sample-app && npm run chatbot",
-    "seed":     "cd sample-app && INGEST_URL=http://localhost:8000 npm run seed"
+    "demo": "cd sample-app && INGEST_URL=http://localhost:8000 npm run demo",
+    "chatbot": "cd sample-app && npm run chatbot",
+    "seed": "cd sample-app && INGEST_URL=http://localhost:8000 npm run seed"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3"
   }
 }
