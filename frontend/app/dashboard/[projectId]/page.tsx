@@ -56,7 +56,25 @@ interface Run {
   createdAt: string;
 }
 
-type Tab = 'overview' | 'logs' | 'runs' | 'anomalies' | 'usage' | 'settings';
+type Tab = 'overview' | 'logs' | 'runs' | 'anomalies' | 'steps' | 'usage' | 'settings';
+
+interface MetricTrend {
+  metric: string;
+  baseline_mean: number;
+  recent_mean: number;
+  sigma: number;
+  direction: 'up' | 'down';
+}
+
+interface StepHealthRow {
+  step_profile_id: string;
+  step_name: string;
+  status: 'warming' | 'healthy' | 'degrading' | 'critical';
+  sample_count: number;
+  trends: MetricTrend[];
+}
+
+const L5_MIN_SAMPLES = 20;
 
 interface AnomalyRow {
   id: number;
@@ -189,6 +207,7 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
   const [analyzing, setAnalyzing]         = useState(false);
   const [logsQuery, setLogsQuery]         = useState('');
   const [runsQuery, setRunsQuery]         = useState('');
+  const [stepHealth, setStepHealth]       = useState<StepHealthRow[]>([]);
 
   const runs = useMemo(() => groupIntoRuns(calls), [calls]);
   const selectedRun = useMemo(
@@ -233,14 +252,16 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
       if (proj.owner !== profile.id) { setAuthError(true); return; }
       setProject(proj);
 
-      const [callsRes, anomaliesRes, registryRes] = await Promise.all([
+      const [callsRes, anomaliesRes, registryRes, healthRes] = await Promise.all([
         fetch(`${BACKEND}/calls/project/${projectId}`),
         fetch(`${BACKEND}/anomalies/project/${proj.id}`),
         fetch(`${BACKEND}/anomalies/registry`),
+        fetch(`${BACKEND}/projects/${proj.id}/step-health`),
       ]);
       if (callsRes.ok) setCalls((await callsRes.json() as Call[]).slice().reverse());
       if (anomaliesRes.ok) setAnomalies(await anomaliesRes.json() as AnomalyRow[]);
       if (registryRes.ok) setConditionRegistry(await registryRes.json() as ConditionRegistry);
+      if (healthRes.ok) setStepHealth(await healthRes.json() as StepHealthRow[]);
     }
     init();
   }, [projectId, router]);
@@ -292,11 +313,14 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
     );
   }
 
+  const degradingCount = stepHealth.filter(s => s.status !== 'healthy').length;
+
   const TABS: { id: Tab; label: string }[] = [
     { id: 'overview',  label: 'Overview' },
     { id: 'logs',      label: 'Logs' },
     { id: 'runs',      label: `Runs${runs.length ? ` (${runs.length})` : ''}` },
     { id: 'anomalies', label: `Anomalies${criticalCount ? ` (${criticalCount} critical)` : anomalyRuns.length ? ` (${anomalyRuns.length})` : ''}` },
+    { id: 'steps',     label: `Steps${degradingCount ? ` (${degradingCount} drifting)` : ''}` },
     { id: 'usage',     label: 'Usage' },
     { id: 'settings',  label: 'Settings' },
   ];
@@ -434,12 +458,15 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
               <AnalysisPanel text={analysis.text} costUsd={analysis.costUsd} onClose={() => setAnalysis(null)} />
             )}
 
-            <RunGraph steps={selectedRun.steps} anomalyRun={anomalyMap.get(selectedRun.runId)} registry={conditionRegistry} onSelect={setSelectedCall} />
+            <RunTimeline steps={selectedRun.steps} anomalyRun={anomalyMap.get(selectedRun.runId)} registry={conditionRegistry} onSelect={setSelectedCall} />
           </div>
         )}
 
         {/* ── Anomalies ── */}
         {tab === 'anomalies' && <AnomaliesTab runs={anomalyRuns} registry={conditionRegistry} />}
+
+        {/* ── Steps health ── */}
+        {tab === 'steps' && <StepsHealthTab health={stepHealth} />}
 
         {/* ── Settings ── */}
         {tab === 'usage'    && <UsageTab project={project} />}
@@ -593,6 +620,9 @@ function OverviewTab({ calls }: { calls: Call[] }) {
           <ChartAxis first={firstLabel} last={lastLabel} />
         </div>
       </div>
+
+      {/* Per-step breakdown */}
+      <StepBreakdown calls={fc} />
 
       {/* Recent errors */}
       {errorCount > 0 && (
@@ -755,25 +785,128 @@ function RunCard({ run, anomaly, onClick }: { run: Run; anomaly?: AnomalyRun; on
   );
 }
 
-// ── Run graph ─────────────────────────────────────────────────────────────────
+// ── Run timeline (Gantt / waterfall) ─────────────────────────────────────────
 
-function RunGraph({ steps, anomalyRun, registry, onSelect }: { steps: Call[]; anomalyRun?: AnomalyRun; registry?: ConditionRegistry; onSelect: (c: Call) => void }) {
+function RunTimeline({ steps, anomalyRun, registry, onSelect }: {
+  steps: Call[];
+  anomalyRun?: AnomalyRun;
+  registry?: ConditionRegistry;
+  onSelect: (c: Call) => void;
+}) {
+  if (!steps.length) return null;
+
+  function fmtMs(ms: number) {
+    return ms >= 1000 ? `${(ms / 1000).toFixed(2)}s` : `${Math.round(ms)}ms`;
+  }
+
+  const stepsWithTime = steps.map(step => {
+    const endMs   = step.created_at ? new Date(step.created_at).getTime() : 0;
+    const startMs = endMs - (step.latency_ms ?? 0);
+    return { step, startMs, endMs };
+  });
+
+  const runStart = Math.min(...stepsWithTime.map(s => s.startMs));
+  const runEnd   = Math.max(...stepsWithTime.map(s => s.endMs));
+  const totalMs  = Math.max(runEnd - runStart, 1);
+
   return (
-    <div className="flex flex-col items-center w-full">
-      {steps.map((step, i) => {
-        const anomalyStep = anomalyRun?.steps.find((s) => s.step_name === step.step_name);
+    <div className="w-full space-y-2">
+      {/* Time axis */}
+      <div className="flex text-[10px] text-gray-700 pl-44 mb-1 justify-between pr-1">
+        <span>0</span>
+        <span>{fmtMs(totalMs / 2)}</span>
+        <span>{fmtMs(totalMs)}</span>
+      </div>
+
+      {stepsWithTime.map(({ step, startMs, endMs }, i) => {
+        const anomalyStep = anomalyRun?.steps.find(s => s.step_name === step.step_name);
+        const isError   = step.status_success === false;
+        const stepScore = anomalyStep?.codes.reduce((s, c) => s + c.score, 0) ?? 0;
+
+        const leftPct  = ((startMs - runStart) / totalMs) * 100;
+        const widthPct = Math.max(((endMs - startMs) / totalMs) * 100, 1.5);
+
+        const barColor = isError
+          ? 'bg-red-500'
+          : stepScore >= 50 ? 'bg-red-400/70'
+          : anomalyStep    ? 'bg-yellow-400/70'
+          : 'bg-indigo-500';
+
+        const trackCls = isError
+          ? 'border-red-800/60 group-hover:border-red-700'
+          : anomalyStep
+          ? 'border-yellow-800/40 group-hover:border-yellow-700/60'
+          : 'border-gray-800 group-hover:border-gray-600';
+
         return (
-        <div key={step.id} className="flex flex-col items-center w-full max-w-xl">
-          <GraphNode step={step} index={i} anomalyStep={anomalyStep} registry={registry} onSelect={onSelect} />
-          {i < steps.length - 1 && (
-            <div className="flex flex-col items-center py-1">
-              <div className="w-px h-5 bg-gray-700" />
-              <div className="w-0 h-0 border-l-[5px] border-r-[5px] border-t-[6px] border-l-transparent border-r-transparent border-t-gray-700" />
+          <div
+            key={step.id ?? i}
+            onClick={() => onSelect(step)}
+            className="flex items-center gap-3 group cursor-pointer"
+          >
+            {/* Step label */}
+            <div className="w-44 shrink-0 text-right pr-1 space-y-0.5">
+              <div className="flex items-center justify-end gap-1.5 min-w-0">
+                <span className={[
+                  'text-[9px] font-bold px-1 py-px rounded uppercase tracking-wider shrink-0',
+                  isError ? 'bg-red-800 text-red-300'
+                    : anomalyStep ? 'bg-yellow-900/60 text-yellow-400'
+                    : 'bg-green-900/60 text-green-400',
+                ].join(' ')}>
+                  {isError ? 'err' : anomalyStep ? `${stepScore}pt` : 'ok'}
+                </span>
+                <span className="text-xs font-mono text-gray-200 truncate">{step.step_name ?? `step_${i + 1}`}</span>
+              </div>
+              <div className="text-[10px] text-gray-600 font-mono">
+                {step.latency_ms != null ? fmtMs(step.latency_ms) : '—'}
+              </div>
             </div>
-          )}
-        </div>
+
+            {/* Bar track */}
+            <div className={`flex-1 h-8 bg-gray-900 border rounded-lg relative overflow-hidden transition-colors ${trackCls}`}>
+              <div
+                className={`absolute top-1.5 bottom-1.5 rounded ${barColor}`}
+                style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+              />
+              {widthPct > 12 && step.latency_ms != null && (
+                <span
+                  className="absolute top-1/2 -translate-y-1/2 text-[10px] text-white/70 font-mono px-2 pointer-events-none"
+                  style={{ left: `${leftPct}%` }}
+                >
+                  {fmtMs(step.latency_ms)}
+                </span>
+              )}
+            </div>
+          </div>
         );
       })}
+
+      {/* Anomaly codes summary */}
+      {anomalyRun && anomalyRun.steps.some(s => s.codes.length > 0) && (
+        <div className="pl-44 mt-3 flex flex-wrap gap-1.5">
+          {anomalyRun.steps.flatMap(s =>
+            s.codes.map(({ code, score }) => {
+              const info = registry?.[String(code)];
+              return (
+                <span
+                  key={`${s.step_name}-${code}`}
+                  title={info?.description}
+                  className={[
+                    'inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border',
+                    score >= 50
+                      ? 'bg-red-950/40 border-red-800/60 text-red-300'
+                      : 'bg-yellow-950/20 border-yellow-800/40 text-yellow-400',
+                  ].join(' ')}
+                >
+                  <span className="text-gray-600">{code}</span>
+                  {info && <span>{info.name}</span>}
+                  <span>+{score}</span>
+                </span>
+              );
+            })
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -926,68 +1059,76 @@ function CallDetailDrawer({ call, onClose, anomalyStep, registry }: {
 
 type AnomalyStep = AnomalyRun['steps'][number];
 
-function GraphNode({ step, index, anomalyStep, registry, onSelect }: {
-  step: Call;
-  index: number;
-  anomalyStep?: AnomalyStep;
-  registry?: ConditionRegistry;
-  onSelect: (c: Call) => void;
-}) {
-  const isError = step.status_success === false;
-  const stepScore = anomalyStep?.codes.reduce((s, c) => s + c.score, 0) ?? 0;
+// ── Per-step breakdown table ──────────────────────────────────────────────────
+
+function StepBreakdown({ calls }: { calls: Call[] }) {
+  if (!calls.length) return null;
+
+  const byStep = new Map<string, { latencies: number[]; errors: number; costs: number[]; total: number }>();
+  for (const c of calls) {
+    const name = c.step_name ?? 'unknown';
+    if (!byStep.has(name)) byStep.set(name, { latencies: [], errors: 0, costs: [], total: 0 });
+    const s = byStep.get(name)!;
+    s.total++;
+    if (c.latency_ms != null) s.latencies.push(c.latency_ms);
+    if (c.status_success === false) s.errors++;
+    if (c.cost != null) s.costs.push(c.cost);
+  }
+
+  const rows = Array.from(byStep.entries()).map(([name, { latencies, errors, costs, total }]) => {
+    const sorted  = [...latencies].sort((a, b) => a - b);
+    const p95     = sorted.length ? sorted[Math.min(Math.ceil(sorted.length * 0.95) - 1, sorted.length - 1)] : 0;
+    const avg     = latencies.length ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0;
+    const avgCost = costs.length ? costs.reduce((a, b) => a + b, 0) / costs.length : 0;
+    return { name, total, avg, p95, errors, errorRate: total > 0 ? (errors / total) * 100 : 0, avgCost };
+  }).sort((a, b) => b.total - a.total);
+
+  if (rows.length === 0) return null;
+
+  const maxAvg = Math.max(...rows.map(r => r.avg), 1);
+
   return (
-    <div
-      onClick={() => onSelect(step)}
-      className={[
-        'w-full rounded-xl border px-5 py-4 font-mono text-xs cursor-pointer transition-colors',
-        isError ? 'border-red-800 bg-red-950/40 hover:border-red-700'
-          : anomalyStep ? 'border-yellow-700/50 bg-yellow-950/15 hover:border-yellow-600/60'
-          : 'border-gray-700 bg-gray-900 hover:border-gray-500',
-      ].join(' ')}
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-2 min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-gray-600 text-[10px]">#{index + 1}</span>
-            <span className={['text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wider',
-              isError ? 'bg-red-800 text-red-200' : 'bg-green-900 text-green-300'].join(' ')}>
-              {isError ? 'error' : 'ok'}
-            </span>
-            {anomalyStep && (
-              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wider bg-yellow-900/60 text-yellow-400">
-                {stepScore}pts
-              </span>
-            )}
-            <span className="text-gray-100 font-semibold text-sm">{step.step_name ?? `step_${index + 1}`}</span>
-          </div>
-          <div className="text-gray-500">{step.model}</div>
-          {isError && step.error && <div className="text-red-400">{step.error}</div>}
-          {!isError && (
-            <div className="flex gap-4 text-gray-400">
-              <span><span className="text-gray-600">in </span>{step.input_tokens ?? 0}</span>
-              <span><span className="text-gray-600">out </span>{step.output_tokens ?? 0}</span>
-              {step.cost != null && <span><span className="text-gray-600">cost </span>${Number(step.cost).toFixed(6)}</span>}
-            </div>
-          )}
-          {anomalyStep && (
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {anomalyStep.codes.map(({ code, score }) => {
-                const info = registry?.[String(code)];
-                return (
-                  <span key={code} title={info?.description} className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700">
-                    <span className="text-gray-500">{code}</span>
-                    {info && <span className="text-gray-300">{info.name}</span>}
-                    <span className={score >= 50 ? 'text-red-400' : 'text-yellow-500'}>+{score}</span>
-                  </span>
-                );
-              })}
-            </div>
-          )}
-        </div>
-        <div className="text-right shrink-0">
-          {step.latency_ms != null && <div className="text-gray-200 text-sm">{step.latency_ms}ms</div>}
-          {step.created_at && <div className="text-gray-600 text-[10px] mt-1">{new Date(step.created_at).toLocaleTimeString()}</div>}
-        </div>
+    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+      <div className="px-5 py-3 border-b border-gray-800">
+        <p className="text-xs text-gray-400 font-medium">Steps</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs font-mono">
+          <thead>
+            <tr className="border-b border-gray-800/60">
+              <th className="text-left px-5 py-2.5 text-gray-600 font-normal">step</th>
+              <th className="text-right px-4 py-2.5 text-gray-600 font-normal">calls</th>
+              <th className="px-4 py-2.5 text-gray-600 font-normal w-40">avg latency</th>
+              <th className="text-right px-4 py-2.5 text-gray-600 font-normal">p95</th>
+              <th className="text-right px-4 py-2.5 text-gray-600 font-normal">errors</th>
+              <th className="text-right px-5 py-2.5 text-gray-600 font-normal">avg cost</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-800/40">
+            {rows.map(row => (
+              <tr key={row.name} className="hover:bg-gray-800/30 transition-colors">
+                <td className="px-5 py-3 text-gray-200">{row.name}</td>
+                <td className="px-4 py-3 text-gray-400 text-right tabular-nums">{row.total}</td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-indigo-500/70 rounded-full"
+                        style={{ width: `${(row.avg / maxAvg) * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-gray-300 tabular-nums w-16 text-right shrink-0">{row.avg}ms</span>
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-gray-500 text-right tabular-nums">{row.p95}ms</td>
+                <td className={`px-4 py-3 text-right tabular-nums ${row.errors > 0 ? 'text-red-400' : 'text-gray-700'}`}>
+                  {row.errors > 0 ? `${row.errorRate.toFixed(1)}%` : '—'}
+                </td>
+                <td className="px-5 py-3 text-gray-500 text-right tabular-nums">${row.avgCost.toFixed(5)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -1176,6 +1317,147 @@ interface ThresholdData {
     total_tokens?: { p50: number; p95: number };
     cost?: { p50: number; p95: number };
   };
+}
+
+// ── Steps health tab ─────────────────────────────────────────────────────────
+
+function StepsHealthTab({ health }: { health: StepHealthRow[] }) {
+  if (health.length === 0) {
+    return (
+      <div className="text-center py-24 text-gray-600 text-sm space-y-2">
+        <p>No step profiles yet — run a trace to create step profiles.</p>
+      </div>
+    );
+  }
+
+  const order = { critical: 0, degrading: 1, warming: 2, healthy: 3 };
+  const sorted = [...health].sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
+
+  const activeCount  = health.filter(s => s.status !== 'warming').length;
+  const warmingCount = health.filter(s => s.status === 'warming').length;
+
+  function fmtMetric(metric: string, value: number) {
+    if (metric === 'latency_ms') return `${Math.round(value)}ms`;
+    if (metric === 'cost') return `$${value.toFixed(5)}`;
+    return Math.round(value).toLocaleString();
+  }
+
+  function metricLabel(metric: string) {
+    if (metric === 'latency_ms') return 'latency';
+    if (metric === 'total_tokens') return 'tokens';
+    return metric;
+  }
+
+  return (
+    <div className="space-y-3 max-w-3xl">
+
+      {/* L5 status banner */}
+      <div className="bg-gray-900 border border-gray-800 rounded-xl px-5 py-3 flex items-center justify-between gap-4">
+        <div className="text-xs text-gray-400">
+          <span className="text-gray-200 font-medium">L5 statistical detection</span>
+          <span className="text-gray-600 mx-2">·</span>
+          {activeCount > 0
+            ? <span className="text-green-400">{activeCount} step{activeCount !== 1 ? 's' : ''} active</span>
+            : <span className="text-gray-500">no steps active yet</span>
+          }
+          {warmingCount > 0 && (
+            <span className="text-gray-500 ml-2">· {warmingCount} warming up</span>
+          )}
+        </div>
+        <span className="text-[10px] text-gray-600 font-mono shrink-0">{L5_MIN_SAMPLES} calls/step to activate</span>
+      </div>
+
+      {sorted.map(row => {
+        const isWarming  = row.status === 'warming';
+        const isHealthy  = row.status === 'healthy';
+        const isCritical = row.status === 'critical';
+        const pct = Math.min((row.sample_count / L5_MIN_SAMPLES) * 100, 100);
+
+        return (
+          <div
+            key={row.step_profile_id}
+            className={[
+              'rounded-xl border p-5',
+              isCritical  ? 'border-red-800/60 bg-red-950/20'
+                : row.status === 'degrading' ? 'border-yellow-800/40 bg-yellow-950/10'
+                : isWarming ? 'border-gray-800 bg-gray-900/60'
+                : 'border-gray-800 bg-gray-900',
+            ].join(' ')}
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className={[
+                  'w-2 h-2 rounded-full shrink-0',
+                  isCritical  ? 'bg-red-400'
+                    : row.status === 'degrading' ? 'bg-yellow-400'
+                    : isWarming ? 'bg-gray-600'
+                    : 'bg-green-400',
+                ].join(' ')} />
+                <span className={`font-mono text-sm ${isWarming ? 'text-gray-500' : 'text-gray-200'}`}>
+                  {row.step_name}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <span className="text-xs text-gray-600 font-mono">{row.sample_count} calls</span>
+                <span className={[
+                  'text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider',
+                  isCritical  ? 'bg-red-900 text-red-300'
+                    : row.status === 'degrading' ? 'bg-yellow-900/60 text-yellow-400'
+                    : isWarming ? 'bg-gray-800 text-gray-500'
+                    : 'bg-green-900/40 text-green-400',
+                ].join(' ')}>
+                  {row.status}
+                </span>
+              </div>
+            </div>
+
+            {/* Warming progress bar */}
+            {isWarming && (
+              <div className="mt-3">
+                <div className="flex justify-between text-[10px] text-gray-600 font-mono mb-1.5">
+                  <span>{row.sample_count} / {L5_MIN_SAMPLES} calls to activate L5</span>
+                  <span>{Math.round(pct)}%</span>
+                </div>
+                <div className="h-1 bg-gray-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-indigo-500/50 rounded-full transition-all"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {row.trends.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {row.trends.map(t => (
+                  <div key={t.metric} className="flex items-center gap-3 text-xs font-mono">
+                    <span className="text-gray-500 w-16 shrink-0">{metricLabel(t.metric)}</span>
+                    <span className="text-gray-500">
+                      baseline <span className="text-gray-300">{fmtMetric(t.metric, t.baseline_mean)}</span>
+                    </span>
+                    <span className={t.direction === 'up' ? 'text-red-400' : 'text-blue-400'}>
+                      {t.direction === 'up' ? '↑' : '↓'}
+                    </span>
+                    <span className="text-gray-500">
+                      recent <span className={isCritical ? 'text-red-300' : 'text-yellow-300'}>
+                        {fmtMetric(t.metric, t.recent_mean)}
+                      </span>
+                    </span>
+                    <span className={[
+                      'ml-auto shrink-0 font-semibold',
+                      Math.abs(t.sigma) >= 3 ? 'text-red-400' : 'text-yellow-500',
+                    ].join(' ')}>
+                      {t.sigma > 0 ? '+' : ''}{t.sigma}σ
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function UsageTab({ project }: { project: Project }) {

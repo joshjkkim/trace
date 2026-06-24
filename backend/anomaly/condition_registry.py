@@ -186,8 +186,34 @@ _L4: list[ConditionDef] = [
     ),
 ]
 
+# --- L5 statistical: z-score deviations from per-step-profile baselines.
+# Only fires when a StepBaseline is available for the current step (≥20 samples).
+# Owns latency/tokens/cost when active — L4's 4001/4002/4003 defer to these. ---
+_L5: list[ConditionDef] = [
+    ConditionDef(
+        5001, "L5_statistical", "latency_zscore",  30.0,
+        "Call latency deviates more than 3σ from this step's historical mean.",
+        "layer_5_statistical.run_layer_5_statistical:latency_zscore",
+    ),
+    ConditionDef(
+        5002, "L5_statistical", "tokens_zscore", 25.0,
+        "Total tokens deviate more than 3σ from this step's historical mean.",
+        "layer_5_statistical.run_layer_5_statistical:tokens_zscore",
+    ),
+    ConditionDef(
+        5003, "L5_statistical", "cost_zscore", 20.0,
+        "Call cost deviates more than 3σ from this step's historical mean.",
+        "layer_5_statistical.run_layer_5_statistical:cost_zscore",
+    ),
+    ConditionDef(
+        5004, "L5_statistical", "output_tokens_zscore", 20.0,
+        "Output tokens deviate more than 3σ from this step's historical mean.",
+        "layer_5_statistical.run_layer_5_statistical:output_tokens_zscore",
+    ),
+]
+
 CONDITION_REGISTRY: dict[int, ConditionDef] = {
-    c.code: c for c in (*_L1, *_L2, *_L3, *_L4)
+    c.code: c for c in (*_L1, *_L2, *_L3, *_L4, *_L5)
 }
 
 

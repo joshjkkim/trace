@@ -217,19 +217,22 @@ def _extract_instruction(prompt: str) -> str:
     return prompt
 
 
-def _dynamic_l4_limits(project_id: str) -> dict[str, float] | None:
-    """Compute per-project L4 limits from recent call history (mean + 2σ).
-    Returns None when fewer than 30 calls exist — caller falls back to static."""
+def _dynamic_l4_limits(project_id: str, step_profile_id: str | None = None) -> dict[str, float] | None:
+    """Compute dynamic L4 limits from recent call history.
+    Scoped to step_profile_id when available — falls back to project-wide.
+    Returns None when fewer than 30 calls exist."""
     try:
-        res = (
+        query = (
             get_client()
             .table("CALLS")
             .select("latency_ms,total_tokens,cost")
             .eq("project_id", project_id)
             .order("created_at", desc=True)
             .limit(100)
-            .execute()
         )
+        if step_profile_id:
+            query = query.eq("step_profile_id", step_profile_id)
+        res = query.execute()
         rows = res.data or []
         if len(rows) < 30:
             return None
@@ -258,7 +261,7 @@ def _dynamic_l4_limits(project_id: str) -> dict[str, float] | None:
         return None
 
 
-def _run_anomaly_detection(payload: IngestPayload, project: dict | None) -> None:
+def _run_anomaly_detection(payload: IngestPayload, project: dict | None, step_profile_id: str | None = None) -> None:
     """Run in a background thread — score the call and persist any anomalies."""
     try:
         from anomaly.config import EvalConfig
@@ -280,10 +283,19 @@ def _run_anomaly_detection(payload: IngestPayload, project: dict | None) -> None
                     config = EvalConfig(limits={**config.limits, **overrides})
                     print(f"[anomaly] manual L4 limits for project {project['id']}: {overrides}")
             else:
-                dynamic = _dynamic_l4_limits(project["id"])
+                dynamic = _dynamic_l4_limits(project["id"], step_profile_id=step_profile_id)
                 if dynamic:
                     config = EvalConfig(limits={**config.limits, **dynamic})
-                    print(f"[anomaly] dynamic L4 limits for project {project['id']}: {dynamic}")
+                    scope = f"profile={step_profile_id}" if step_profile_id else "project-wide"
+                    print(f"[anomaly] dynamic L4 limits ({scope}): {dynamic}")
+
+        # L5: inject per-step statistical baseline when available
+        if step_profile_id:
+            from services.baseline_service import compute_baseline
+            baseline = compute_baseline(step_profile_id)
+            if baseline:
+                config = EvalConfig(**{**config.model_dump(), "baseline": baseline})
+                print(f"[anomaly] L5 baseline for profile={step_profile_id}: n={baseline.sample_count}")
         result = evaluate_call(call_input, config)
         print(f"[anomaly] run={payload.run_id} step={payload.step_name} score={result.total_score} triggered={result.triggered} layer={result.stopped_at_layer} codes={dict(result.error_map)}")
 
@@ -334,6 +346,30 @@ def _run_anomaly_detection(payload: IngestPayload, project: dict | None) -> None
         print(f"[ingest] anomaly detection failed for run {payload.run_id}: {exc}")
 
 
+def _run_fingerprint_then_anomaly(payload: IngestPayload, project: dict | None, trace_id: str) -> None:
+    """Fingerprint first to get step_profile_id, then run anomaly detection with it.
+    Keeps them in one thread so anomaly detection gets per-step baselines."""
+    step_profile_id: str | None = None
+
+    if payload.project_id:
+        try:
+            from services.fingerprinter import match_or_create_profile
+            profile_id, _ = match_or_create_profile(
+                project_id=payload.project_id,
+                step_name=payload.step_name,
+                prompt_json=payload.prompt,
+            )
+            if profile_id:
+                step_profile_id = profile_id
+                get_client().table("CALLS").update(
+                    {"step_profile_id": profile_id}
+                ).eq("id", trace_id).execute()
+        except Exception as exc:
+            print(f"[fingerprint] failed: {exc}")
+
+    _run_anomaly_detection(payload, project, step_profile_id=step_profile_id)
+
+
 @router.post("/ingest", response_model=IngestResponse)
 def ingest(request: Request, payload: IngestPayload) -> IngestResponse:
     auth = request.headers.get("Authorization", "")
@@ -347,7 +383,7 @@ def ingest(request: Request, payload: IngestPayload) -> IngestResponse:
 
     trace_id = ingest_trace(payload)
 
-    threading.Thread(target=_run_anomaly_detection, args=(payload, project), daemon=True).start()
+    threading.Thread(target=_run_fingerprint_then_anomaly, args=(payload, project, trace_id), daemon=True).start()
 
     if project:
         threading.Thread(target=_fire_slack, args=(project, payload), daemon=True).start()

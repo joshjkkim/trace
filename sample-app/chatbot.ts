@@ -256,10 +256,8 @@ async function runWorkflow(message: string, history: HistoryItem[]) {
   const c1 = await run.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 16,
-    messages: [{
-      role: 'user',
-      content: `Classify this support message as exactly one of: billing, technical, general, feature-request.\nReply with just the category.\n\nMessage: "${message}"`,
-    }],
+    system: 'Classify the user support message as exactly one of: billing, technical, general, feature-request. Reply with just the category, nothing else.',
+    messages: [{ role: 'user', content: message }],
     _trace: { stepName: 'classify-intent' },
   } as TracedMessageParams);
   const intent = text(c1).trim().toLowerCase().replace(/[^a-z-]/g, '');
@@ -268,10 +266,8 @@ async function runWorkflow(message: string, history: HistoryItem[]) {
   const c2 = await run.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 48,
-    messages: [{
-      role: 'user',
-      content: `In 1 short sentence, what is the core issue or request in this message? Be specific.\n\n"${message}"`,
-    }],
+    system: 'In 1 short sentence, summarize the core issue or request in the user message. Be specific.',
+    messages: [{ role: 'user', content: message }],
     _trace: { stepName: 'extract-context' },
   } as TracedMessageParams);
   const context = text(c2).trim();
@@ -280,13 +276,10 @@ async function runWorkflow(message: string, history: HistoryItem[]) {
   const c3 = await run.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 512,
-    system: `You are a friendly customer support agent for Acme AI, a developer observability platform.
-Intent: ${intent}
-Core issue: ${context}
-Be concise (2–4 sentences), helpful, and professional. Don't mention you are an AI.`,
+    system: 'You are a friendly customer support agent for Acme AI, a developer observability platform. Be concise (2–4 sentences), helpful, and professional. Do not mention you are an AI.',
     messages: [
       ...history.map((m) => ({ role: m.role, content: m.content })),
-      { role: 'user', content: message },
+      { role: 'user', content: `[Intent: ${intent}] [Issue: ${context}]\n\n${message}` },
     ],
     _trace: { stepName: 'generate-reply' },
   } as TracedMessageParams);

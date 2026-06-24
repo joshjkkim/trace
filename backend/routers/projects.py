@@ -330,6 +330,35 @@ def get_thresholds(project_id: str) -> dict:
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@router.get("/{project_id}/step-health")
+def get_step_health(project_id: str) -> list[dict]:
+    """Return trend health for every step profile in the project."""
+    try:
+        from services.trend_service import compute_project_health
+        results = compute_project_health(project_id)
+        return [
+            {
+                "step_profile_id": r.step_profile_id,
+                "step_name": r.step_name,
+                "status": r.status,
+                "sample_count": r.sample_count,
+                "trends": [
+                    {
+                        "metric": t.metric,
+                        "baseline_mean": round(t.baseline_mean, 4),
+                        "recent_mean": round(t.recent_mean, 4),
+                        "sigma": t.sigma,
+                        "direction": t.direction,
+                    }
+                    for t in r.trends
+                ],
+            }
+            for r in results
+        ]
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @router.delete("/{project_id}")
 def delete_project(project_id: str) -> dict:
     """Delete a project"""

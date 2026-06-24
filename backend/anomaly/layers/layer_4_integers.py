@@ -48,17 +48,17 @@ def run_layer_4_integers(payload: CallInput, config: EvalConfig) -> list[EvalHit
     expected = infer_expected_shape(payload.prompt or "")
     step = (payload.step_name or "").lower()
 
-    # 4001 — latency over limit.
-    if payload.latency_ms is not None and payload.latency_ms > lim["latency_ms_max"]:
-        fire(4001, observed=payload.latency_ms, expected=f"<= {lim['latency_ms_max']}")
-
-    # 4002 — total tokens over limit.
-    if payload.total_tokens is not None and payload.total_tokens > lim["total_tokens_max"]:
-        fire(4002, observed=payload.total_tokens, expected=f"<= {lim['total_tokens_max']}")
-
-    # 4003 — cost over limit.
-    if payload.cost is not None and payload.cost > lim["cost_max"]:
-        fire(4003, observed=payload.cost, expected=f"<= {lim['cost_max']}")
+    # 4001/4002/4003 — raw threshold checks.
+    # Deferred when a per-step statistical baseline is active (L5 owns these metrics
+    # with z-scores when baseline is present, to avoid double-counting).
+    has_baseline = config.baseline is not None
+    if not has_baseline:
+        if payload.latency_ms is not None and payload.latency_ms > lim["latency_ms_max"]:
+            fire(4001, observed=payload.latency_ms, expected=f"<= {lim['latency_ms_max']}")
+        if payload.total_tokens is not None and payload.total_tokens > lim["total_tokens_max"]:
+            fire(4002, observed=payload.total_tokens, expected=f"<= {lim['total_tokens_max']}")
+        if payload.cost is not None and payload.cost > lim["cost_max"]:
+            fire(4003, observed=payload.cost, expected=f"<= {lim['cost_max']}")
 
     # 4004 — output/input token ratio anomaly.
     if in_tok > 0:

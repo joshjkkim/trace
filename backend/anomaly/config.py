@@ -8,11 +8,21 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from .schemas import StepBaseline
+
 
 class EvalConfig(BaseModel):
     threshold: float = 100.0
     # code -> penalty, overrides the registry value for that code when present.
     penalty_overrides: dict[int, float] = Field(default_factory=dict)
+
+    # Per-step statistical baseline (L5). When present, L5 scores latency/tokens/
+    # cost as z-scores against this step's own history, and L4 defers its raw
+    # threshold checks (4001/4002/4003) to avoid double-counting the same metric.
+    baseline: StepBaseline | None = None
+
+    # z-score magnitude beyond which an L5 metric deviation fires.
+    zscore_threshold: float = 3.0
 
     # Static numeric limits — consumed by L4 later. Defined now so config shape
     # is stable across layers.

@@ -18,15 +18,17 @@ from .layers.layer_1_hard import run_layer_1_hard
 from .layers.layer_2_regex import run_layer_2_regex
 from .layers.layer_3_fingerprinting import run_layer_3_fingerprinting
 from .layers.layer_4_integers import run_layer_4_integers
+from .layers.layer_5_statistical import run_layer_5_statistical
 from .schemas import CallInput, EvalHit, EvalResult, LayerId
 from .shape_classifier import classify_shape
 
 # Ordered pipeline. (layer_id, runner) — order is the scoring order.
 _LAYERS: list[tuple[LayerId, object]] = [
-    ("L1_hard", run_layer_1_hard),
-    ("L2_format", run_layer_2_regex),
+    ("L1_hard",        run_layer_1_hard),
+    ("L2_format",      run_layer_2_regex),
     ("L3_fingerprint", run_layer_3_fingerprinting),
-    ("L4_integers", run_layer_4_integers),
+    ("L4_integers",    run_layer_4_integers),
+    ("L5_statistical", run_layer_5_statistical),
 ]
 
 

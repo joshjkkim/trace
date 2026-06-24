@@ -12,7 +12,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 # Where a condition lives. Stable strings — also used in EvalResult.stopped_at_layer.
-LayerId = Literal["L1_hard", "L2_format", "L3_fingerprint", "L4_integers"]
+LayerId = Literal["L1_hard", "L2_format", "L3_fingerprint", "L4_integers", "L5_statistical"]
 
 # Dumb-down classification of a prompt or output blob (used by L3 later).
 OutputShape = Literal[
@@ -39,6 +39,35 @@ class CallInput(BaseModel):
     output_code: str | None = None
     run_id: str
     project_id: str | None = None
+
+
+class MetricStat(BaseModel):
+    """Mean/stddev for one numeric metric over a step profile's recent history."""
+
+    mean: float
+    std: float
+    count: int
+
+    def zscore(self, observed: float) -> float | None:
+        """z = (observed - mean) / std. None when std is ~0 (no spread to judge)."""
+        if self.std < 1e-9:
+            return None
+        return (observed - self.mean) / self.std
+
+
+class StepBaseline(BaseModel):
+    """Per-step-profile statistical baseline, computed from recent call history.
+
+    Injected into EvalConfig so the L5 layer can score a call against the normal
+    behavior of *its own step* rather than a project-wide limit. None metrics mean
+    not enough samples for that field.
+    """
+
+    sample_count: int
+    latency_ms: MetricStat | None = None
+    total_tokens: MetricStat | None = None
+    output_tokens: MetricStat | None = None
+    cost: MetricStat | None = None
 
 
 class EvalHit(BaseModel):
