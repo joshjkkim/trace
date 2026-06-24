@@ -28,6 +28,8 @@ export interface TracePayload {
   status_success: boolean;
   output_code?: string;
   error?: string;
+  span_id?: string;
+  parent_span_id?: string;
 }
 
 /** Minimal shape we need from a streaming response — the real MessageStream satisfies this. */

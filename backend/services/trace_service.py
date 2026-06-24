@@ -21,6 +21,8 @@ def ingest_trace(payload: IngestPayload) -> str:
         "run_id":          payload.run_id,
         "step_index":      payload.step_index,
         "project_id":      payload.project_id,
+        "span_id":         payload.span_id,
+        "parent_span_id":  payload.parent_span_id,
     }
     # Remove None values so Supabase uses column defaults
     data = {k: v for k, v in data.items() if v is not None}
@@ -141,4 +143,6 @@ def _row_to_trace(row: dict) -> TraceRecord:
         run_id=row["run_id"],
         step_index=row.get("step_index"),
         project_id=row.get("project_id"),
+        span_id=row.get("span_id"),
+        parent_span_id=row.get("parent_span_id"),
     )

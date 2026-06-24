@@ -38,7 +38,7 @@ class CallInput(BaseModel):
     error: str | None = None
     output_code: str | None = None
     run_id: str
-    project_id: int | None = None
+    project_id: str | None = None
 
 
 class EvalHit(BaseModel):

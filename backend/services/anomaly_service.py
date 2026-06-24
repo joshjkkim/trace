@@ -2,7 +2,7 @@ from db import get_client
 from schemas.anomaly import AnomalyInput, AnomalyRecord
 
 
-def ingest_anomalies(items: list[AnomalyInput], project_id: int | None) -> list[AnomalyRecord]:
+def ingest_anomalies(items: list[AnomalyInput], project_id: str | None) -> list[AnomalyRecord]:
     """Normalize bad_scores dict into individual rows and insert them all."""
     client = get_client()
     rows = []
@@ -35,7 +35,7 @@ def get_anomalies_for_run(run_id: str) -> list[AnomalyRecord]:
     return [AnomalyRecord(**r) for r in res.data]
 
 
-def get_anomalies_for_project(project_id: int) -> list[AnomalyRecord]:
+def get_anomalies_for_project(project_id: str) -> list[AnomalyRecord]:
     res = (
         get_client()
         .table("ANOMALIES")

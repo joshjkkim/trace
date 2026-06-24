@@ -3,6 +3,14 @@ import type { Tracer } from '../tracer';
 import type { AnthropicClientLike, MessageStreamLike, TracedMessageParams, TracedStreamParams } from '../types';
 import { getCost } from '../cost';
 import { TracedRun } from '../run';
+import { getActiveSpanId, runWithSpan } from '../context';
+
+function uuid(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
 
 export type { AnthropicClientLike, TracedMessageParams };
 
@@ -34,11 +42,13 @@ export function wrapAnthropic(client: AnthropicClientLike, tracer: Tracer): Trac
         const { _trace, ...cleanParams } = params;
         const currentStep = stepIndex++;
         const stepName = _trace?.stepName ?? `step_${currentStep + 1}`;
+        const spanId = uuid();
+        const parentSpanId = getActiveSpanId();
         const start = Date.now();
 
         try {
-          const response = await client.messages.create(
-            cleanParams as MessageCreateParamsNonStreaming,
+          const response = await runWithSpan(spanId, () =>
+            client.messages.create(cleanParams as MessageCreateParamsNonStreaming),
           );
 
           const latency_ms    = Date.now() - start;
@@ -60,6 +70,8 @@ export function wrapAnthropic(client: AnthropicClientLike, tracer: Tracer): Trac
             cost: getCost(model, input_tokens, output_tokens),
             status_success: true,
             output_code: extractOutputCode(response),
+            span_id: spanId,
+            parent_span_id: parentSpanId ?? undefined,
           });
 
           return response;
@@ -80,6 +92,8 @@ export function wrapAnthropic(client: AnthropicClientLike, tracer: Tracer): Trac
             cost: 0,
             status_success: false,
             error: message,
+            span_id: spanId,
+            parent_span_id: parentSpanId ?? undefined,
           });
 
           throw err;
@@ -90,6 +104,8 @@ export function wrapAnthropic(client: AnthropicClientLike, tracer: Tracer): Trac
         const { _trace, ...cleanParams } = params;
         const currentStep = stepIndex++;
         const stepName = _trace?.stepName ?? `step_${currentStep + 1}`;
+        const spanId = uuid();
+        const parentSpanId = getActiveSpanId();
         const start = Date.now();
 
         if (!client.messages.stream) {
@@ -116,6 +132,8 @@ export function wrapAnthropic(client: AnthropicClientLike, tracer: Tracer): Trac
             cost: getCost(model, input_tokens, output_tokens),
             status_success: true,
             output_code: extractOutputCode(response),
+            span_id: spanId,
+            parent_span_id: parentSpanId ?? undefined,
           });
         }).catch((err: unknown) => {
           const latency_ms = Date.now() - start;
@@ -132,6 +150,8 @@ export function wrapAnthropic(client: AnthropicClientLike, tracer: Tracer): Trac
             cost: 0,
             status_success: false,
             error: err instanceof Error ? err.message : String(err),
+            span_id: spanId,
+            parent_span_id: parentSpanId ?? undefined,
           });
         });
 

@@ -7,10 +7,10 @@ import { supabase } from '@/lib/supabase';
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
 
 interface Project {
-  id: number;
+  id: string;
   name: string;
   API_KEY: string;
-  owner: number;
+  owner: string;
   created_at: string;
   call_count: number;
   error_count: number;

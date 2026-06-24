@@ -7,10 +7,10 @@ import { supabase } from '@/lib/supabase';
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
 
 interface Project {
-  id: number;
+  id: string;
   name: string;
   API_KEY: string;
-  owner: number;
+  owner: string;
   created_at: string;
   call_count: number;
   slack_webhook_url?: string | null;
@@ -43,7 +43,7 @@ interface Call {
   output_code?: string;
   error?: string;
   created_at?: string;
-  project_id?: number;
+  project_id?: string;
 }
 
 interface Run {
@@ -62,7 +62,7 @@ interface AnomalyRow {
   id: number;
   step_name: string;
   run_id: string;
-  project_id: number | null;
+  project_id: string | null;
   error_code: number;
   penalty_score: number;
   created_at: string;
@@ -230,7 +230,7 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
       if (!res.ok) { router.replace('/dashboard'); return; }
       const proj: Project = await res.json();
 
-      if (Number(proj.owner) !== Number(profile.id)) { setAuthError(true); return; }
+      if (proj.owner !== profile.id) { setAuthError(true); return; }
       setProject(proj);
 
       const [callsRes, anomaliesRes, registryRes] = await Promise.all([
@@ -250,7 +250,7 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
       .channel(`calls-project-${projectId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'CALLS' }, (payload) => {
         const call = payload.new as Call;
-        if (Number(call.project_id) !== Number(projectId)) return;
+        if (call.project_id !== projectId) return;
         setCalls((prev) => [call, ...prev]);
       })
       .subscribe((s) => {
@@ -265,7 +265,7 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
       .channel(`anomalies-project-${projectId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ANOMALIES' }, (payload) => {
         const row = payload.new as AnomalyRow;
-        if (Number(row.project_id) !== Number(projectId)) return;
+        if (row.project_id !== projectId) return;
         setAnomalies((prev) => [...prev, row]);
       })
       .subscribe();

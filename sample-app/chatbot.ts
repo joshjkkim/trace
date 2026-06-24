@@ -4,7 +4,6 @@
  *   classify-intent → extract-context → generate-reply
  *
  * Usage:
- *   INGEST_URL=http://localhost:8000 npm run chatbot
  *
  * Then open http://localhost:3001
  */
@@ -20,8 +19,8 @@ loadEnv({ path: '.env.local' });
 loadEnv();
 
 const PORT       = 3001;
-const INGEST_URL = process.env.INGEST_URL ?? 'https://trace-production-940c.up.railway.app';
-const API_KEY    = process.env.TRACE_API_KEY ?? 'trace_dZrPGhyT0bXXwlIc0nzi2pWtf9LuApeL';
+const INGEST_URL = process.env.INGEST_URL;
+const API_KEY    = process.env.TRACE_API_KEY ?? '';
 
 if (!process.env.ANTHROPIC_API_KEY) {
   console.error('Missing ANTHROPIC_API_KEY — set it in .env.local');

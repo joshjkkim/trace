@@ -19,7 +19,9 @@ class IngestPayload(BaseModel):
     output_code: str | None = None
     run_id: str
     step_index: int | None = None
-    project_id: int | None = None
+    project_id: str | None = None
+    span_id: str | None = None
+    parent_span_id: str | None = None
 
 
 class IngestResponse(BaseModel):
@@ -44,7 +46,9 @@ class TraceRecord(BaseModel):
     output_code: str | None = None
     run_id: str
     step_index: int | None = None
-    project_id: int | None = None
+    project_id: str | None = None
+    span_id: str | None = None
+    parent_span_id: str | None = None
 
 
 # Aggregated metrics for a workflow run
@@ -64,7 +68,7 @@ class WorkflowMetrics(BaseModel):
 # Complete workflow run with all steps and metrics
 class WorkflowRun(BaseModel):
     run_id: str
-    project_id: int | None = None
+    project_id: str | None = None
     steps: list[TraceRecord]
     metrics: WorkflowMetrics
     created_at: datetime  # earliest step

@@ -11,7 +11,7 @@ class AnomalyRecord(BaseModel):
     id: int
     step_name: str
     run_id: str
-    project_id: int | None = None
+    project_id: str | None = None
     error_code: int
     penalty_score: int
     created_at: str

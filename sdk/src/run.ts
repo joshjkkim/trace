@@ -2,6 +2,7 @@ import type { Message, MessageCreateParamsNonStreaming } from '@anthropic-ai/sdk
 import type { Tracer } from './tracer';
 import type { AnthropicClientLike, MessageStreamLike, TracedMessageParams, TracedStreamParams } from './types';
 import { getCost } from './cost';
+import { getActiveSpanId, runWithSpan } from './context';
 
 function uuid(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -41,11 +42,13 @@ export class TracedRun {
     const { _trace, ...cleanParams } = params;
     const currentStep = this.stepIndex++;
     const stepName = _trace?.stepName ?? `step_${currentStep + 1}`;
+    const spanId = uuid();
+    const parentSpanId = getActiveSpanId();
     const start = Date.now();
 
     try {
-      const response = await this.client.messages.create(
-        cleanParams as MessageCreateParamsNonStreaming,
+      const response = await runWithSpan(spanId, () =>
+        this.client.messages.create(cleanParams as MessageCreateParamsNonStreaming),
       );
 
       const latency_ms    = Date.now() - start;
@@ -67,6 +70,8 @@ export class TracedRun {
         cost: getCost(model, input_tokens, output_tokens),
         status_success: true,
         output_code: extractOutputCode(response),
+        span_id: spanId,
+        parent_span_id: parentSpanId ?? undefined,
       });
 
       return response;
@@ -87,6 +92,8 @@ export class TracedRun {
         cost: 0,
         status_success: false,
         error: message,
+        span_id: spanId,
+        parent_span_id: parentSpanId ?? undefined,
       });
 
       throw err;
@@ -97,6 +104,8 @@ export class TracedRun {
     const { _trace, ...cleanParams } = params;
     const currentStep = this.stepIndex++;
     const stepName = _trace?.stepName ?? `step_${currentStep + 1}`;
+    const spanId = uuid();
+    const parentSpanId = getActiveSpanId();
     const start = Date.now();
 
     if (!this.client.messages.stream) {
@@ -123,6 +132,8 @@ export class TracedRun {
         cost: getCost(model, input_tokens, output_tokens),
         status_success: true,
         output_code: extractOutputCode(response),
+        span_id: spanId,
+        parent_span_id: parentSpanId ?? undefined,
       });
     }).catch((err: unknown) => {
       const latency_ms = Date.now() - start;
@@ -139,6 +150,8 @@ export class TracedRun {
         cost: 0,
         status_success: false,
         error: err instanceof Error ? err.message : String(err),
+        span_id: spanId,
+        parent_span_id: parentSpanId ?? undefined,
       });
     });
 

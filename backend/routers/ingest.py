@@ -217,7 +217,7 @@ def _extract_instruction(prompt: str) -> str:
     return prompt
 
 
-def _dynamic_l4_limits(project_id: int) -> dict[str, float] | None:
+def _dynamic_l4_limits(project_id: str) -> dict[str, float] | None:
     """Compute per-project L4 limits from recent call history (mean + 2σ).
     Returns None when fewer than 30 calls exist — caller falls back to static."""
     try:

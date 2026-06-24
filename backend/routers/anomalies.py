@@ -18,7 +18,7 @@ def ingest(request: Request, items: list[AnomalyInput]) -> list[AnomalyRecord]:
 
 
 @router.get("/project/{project_id}", response_model=list[AnomalyRecord])
-def get_for_project(project_id: int) -> list[AnomalyRecord]:
+def get_for_project(project_id: str) -> list[AnomalyRecord]:
     return get_anomalies_for_project(project_id)
 
 

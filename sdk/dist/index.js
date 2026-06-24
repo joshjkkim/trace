@@ -45,6 +45,16 @@ function getCost(model, inputTokens, outputTokens) {
   return inputTokens / 1e6 * pricing.inputPer1M + outputTokens / 1e6 * pricing.outputPer1M;
 }
 
+// src/context.ts
+var import_node_async_hooks = require("async_hooks");
+var spanStorage = new import_node_async_hooks.AsyncLocalStorage();
+function getActiveSpanId() {
+  return spanStorage.getStore()?.spanId ?? null;
+}
+function runWithSpan(spanId, fn) {
+  return spanStorage.run({ spanId }, fn);
+}
+
 // src/run.ts
 function uuid() {
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
@@ -71,10 +81,13 @@ var TracedRun = class {
     const { _trace, ...cleanParams } = params;
     const currentStep = this.stepIndex++;
     const stepName = _trace?.stepName ?? `step_${currentStep + 1}`;
+    const spanId = uuid();
+    const parentSpanId = getActiveSpanId();
     const start = Date.now();
     try {
-      const response = await this.client.messages.create(
-        cleanParams
+      const response = await runWithSpan(
+        spanId,
+        () => this.client.messages.create(cleanParams)
       );
       const latency_ms = Date.now() - start;
       const input_tokens = response.usage?.input_tokens ?? 0;
@@ -93,7 +106,9 @@ var TracedRun = class {
         latency_ms,
         cost: getCost(model, input_tokens, output_tokens),
         status_success: true,
-        output_code: extractOutputCode(response)
+        output_code: extractOutputCode(response),
+        span_id: spanId,
+        parent_span_id: parentSpanId ?? void 0
       });
       return response;
     } catch (err) {
@@ -111,7 +126,9 @@ var TracedRun = class {
         latency_ms,
         cost: 0,
         status_success: false,
-        error: message
+        error: message,
+        span_id: spanId,
+        parent_span_id: parentSpanId ?? void 0
       });
       throw err;
     }
@@ -120,6 +137,8 @@ var TracedRun = class {
     const { _trace, ...cleanParams } = params;
     const currentStep = this.stepIndex++;
     const stepName = _trace?.stepName ?? `step_${currentStep + 1}`;
+    const spanId = uuid();
+    const parentSpanId = getActiveSpanId();
     const start = Date.now();
     if (!this.client.messages.stream) {
       throw new Error("[trace-ai] This Anthropic client does not support streaming.");
@@ -143,7 +162,9 @@ var TracedRun = class {
         latency_ms,
         cost: getCost(model, input_tokens, output_tokens),
         status_success: true,
-        output_code: extractOutputCode(response)
+        output_code: extractOutputCode(response),
+        span_id: spanId,
+        parent_span_id: parentSpanId ?? void 0
       });
     }).catch((err) => {
       const latency_ms = Date.now() - start;
@@ -159,7 +180,9 @@ var TracedRun = class {
         latency_ms,
         cost: 0,
         status_success: false,
-        error: err instanceof Error ? err.message : String(err)
+        error: err instanceof Error ? err.message : String(err),
+        span_id: spanId,
+        parent_span_id: parentSpanId ?? void 0
       });
     });
     return messageStream;
@@ -167,6 +190,12 @@ var TracedRun = class {
 };
 
 // src/wrappers/anthropic.ts
+function uuid2() {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    return (c === "x" ? r : r & 3 | 8).toString(16);
+  });
+}
 function extractOutputCode2(response) {
   const text = response.content.filter((b) => b.type === "text").map((b) => b.text).join("");
   return text.length > 0 ? text : void 0;
@@ -179,10 +208,13 @@ function wrapAnthropic(client, tracer) {
         const { _trace, ...cleanParams } = params;
         const currentStep = stepIndex++;
         const stepName = _trace?.stepName ?? `step_${currentStep + 1}`;
+        const spanId = uuid2();
+        const parentSpanId = getActiveSpanId();
         const start = Date.now();
         try {
-          const response = await client.messages.create(
-            cleanParams
+          const response = await runWithSpan(
+            spanId,
+            () => client.messages.create(cleanParams)
           );
           const latency_ms = Date.now() - start;
           const input_tokens = response.usage?.input_tokens ?? 0;
@@ -201,7 +233,9 @@ function wrapAnthropic(client, tracer) {
             latency_ms,
             cost: getCost(model, input_tokens, output_tokens),
             status_success: true,
-            output_code: extractOutputCode2(response)
+            output_code: extractOutputCode2(response),
+            span_id: spanId,
+            parent_span_id: parentSpanId ?? void 0
           });
           return response;
         } catch (err) {
@@ -219,7 +253,9 @@ function wrapAnthropic(client, tracer) {
             latency_ms,
             cost: 0,
             status_success: false,
-            error: message
+            error: message,
+            span_id: spanId,
+            parent_span_id: parentSpanId ?? void 0
           });
           throw err;
         }
@@ -228,6 +264,8 @@ function wrapAnthropic(client, tracer) {
         const { _trace, ...cleanParams } = params;
         const currentStep = stepIndex++;
         const stepName = _trace?.stepName ?? `step_${currentStep + 1}`;
+        const spanId = uuid2();
+        const parentSpanId = getActiveSpanId();
         const start = Date.now();
         if (!client.messages.stream) {
           throw new Error("[trace-ai] This Anthropic client does not support streaming.");
@@ -251,7 +289,9 @@ function wrapAnthropic(client, tracer) {
             latency_ms,
             cost: getCost(model, input_tokens, output_tokens),
             status_success: true,
-            output_code: extractOutputCode2(response)
+            output_code: extractOutputCode2(response),
+            span_id: spanId,
+            parent_span_id: parentSpanId ?? void 0
           });
         }).catch((err) => {
           const latency_ms = Date.now() - start;
@@ -267,7 +307,9 @@ function wrapAnthropic(client, tracer) {
             latency_ms,
             cost: 0,
             status_success: false,
-            error: err instanceof Error ? err.message : String(err)
+            error: err instanceof Error ? err.message : String(err),
+            span_id: spanId,
+            parent_span_id: parentSpanId ?? void 0
           });
         });
         return messageStream;
@@ -280,7 +322,7 @@ function wrapAnthropic(client, tracer) {
 }
 
 // src/tracer.ts
-function uuid2() {
+function uuid3() {
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     const r = Math.random() * 16 | 0;
     return (c === "x" ? r : r & 3 | 8).toString(16);
@@ -291,7 +333,7 @@ var Tracer = class {
   constructor(config) {
     this.apiUrl = (config.apiUrl ?? DEFAULT_API_URL).replace(/\/$/, "");
     this.apiKey = config.apiKey;
-    this.runId = config.runId ?? uuid2();
+    this.runId = config.runId ?? uuid3();
   }
   ingest(payload) {
     return fetch(`${this.apiUrl}/ingest`, {

@@ -7,9 +7,9 @@ from typing import Optional
 DASHBOARD_BASE = os.environ.get("DASHBOARD_BASE_URL", "http://localhost:3000")
 
 # Per-project cooldown so a burst of errors doesn't spam the channel
-_rate_cooldown:    dict[int, float] = {}
-_anomaly_cooldown: dict[int, float] = {}
-_budget_cooldown:  dict[int, float] = {}
+_rate_cooldown:    dict[str, float] = {}
+_anomaly_cooldown: dict[str, float] = {}
+_budget_cooldown:  dict[str, float] = {}
 RATE_COOLDOWN_SEC    = 300    # 5 minutes between error-rate pings
 ANOMALY_COOLDOWN_SEC = 60     # 1 minute between anomaly pings per project
 BUDGET_COOLDOWN_SEC  = 3600   # 1 hour between budget alerts
@@ -31,7 +31,7 @@ def _post(url: str, payload: dict) -> bool:
 def send_error_alert(
     webhook_url: str,
     project_name: str,
-    project_id: int,
+    project_id: str,
     step_name: str,
     model: str,
     error: str,
@@ -69,7 +69,7 @@ def send_error_alert(
 def send_rate_alert(
     webhook_url: str,
     project_name: str,
-    project_id: int,
+    project_id: str,
     error_rate: float,
     window: int,
 ) -> bool:
@@ -106,7 +106,7 @@ def send_rate_alert(
 def send_anomaly_alert(
     webhook_url: str,
     project_name: str,
-    project_id: int,
+    project_id: str,
     step_name: str,
     run_id: str,
     total_score: float,
@@ -161,7 +161,7 @@ def send_anomaly_alert(
 def send_budget_alert(
     webhook_url: str,
     project_name: str,
-    project_id: int,
+    project_id: str,
     spent_usd: float,
     budget_usd: float,
 ) -> bool:

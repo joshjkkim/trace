@@ -13,10 +13,10 @@ function generateApiKey(): string {
 
 export default function CreateProject() {
   const router = useRouter();
-  const [profileId, setProfileId] = useState<number | null>(null);
+  const [profileId, setProfileId] = useState<string | null>(null);
   const [apiKey, setApiKey]       = useState('');
   const [name, setName]           = useState('');
-  const [created, setCreated]     = useState<{ id: number; apiKey: string; name: string } | null>(null);
+  const [created, setCreated]     = useState<{ id: string; apiKey: string; name: string } | null>(null);
   const [error, setError]         = useState<string | null>(null);
   const [loading, setLoading]     = useState(false);
   const [copied, setCopied]       = useState(false);

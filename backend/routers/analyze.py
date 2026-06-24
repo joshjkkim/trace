@@ -71,7 +71,7 @@ def _build_anomaly_text(anomalies: list) -> str:
     return "\n".join(lines)
 
 
-def _record_usage(project_id: int | None, run_id: str, input_tokens: int, output_tokens: int, cost: float) -> None:
+def _record_usage(project_id: str | None, run_id: str, input_tokens: int, output_tokens: int, cost: float) -> None:
     try:
         get_client().table("USAGE").insert({
             "project_id": project_id,
@@ -88,7 +88,7 @@ def _record_usage(project_id: int | None, run_id: str, input_tokens: int, output
         print(f"[analyze] usage record failed: {exc}")
 
 
-def _check_budget(project_id: int, just_spent: float) -> None:
+def _check_budget(project_id: str, just_spent: float) -> None:
     try:
         db = get_client()
         proj = db.table("PROJECTS").select("name,monthly_budget_usd,slack_webhook_url").eq("id", project_id).single().execute()
@@ -126,7 +126,7 @@ def analyze_run(run_id: str) -> dict:
     if not calls_res.data:
         raise HTTPException(status_code=404, detail="Run not found")
 
-    project_id: int | None = calls_res.data[0].get("project_id")
+    project_id: str | None = calls_res.data[0].get("project_id")
     project_name = "unknown"
     if project_id:
         proj = db.table("PROJECTS").select("name").eq("id", project_id).single().execute()

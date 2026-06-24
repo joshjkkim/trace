@@ -22,7 +22,7 @@ class CallResponse(BaseModel):
     error: str | None = None
     output_code: str | None = None
     run_id: str | None = None
-    project_id: int | None = None
+    project_id: str | None = None
     step_index: int | None = None
 
 
@@ -47,7 +47,7 @@ def get_calls_by_run_id(run_id: str) -> List[CallResponse]:
 
 
 @router.get("/project/{project_id}", response_model=List[CallResponse])
-def get_calls_by_project_id(project_id: int) -> List[CallResponse]:
+def get_calls_by_project_id(project_id: str) -> List[CallResponse]:
     """Get all calls from a specific project_id."""
     try:
         client = get_client()

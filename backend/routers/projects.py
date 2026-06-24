@@ -8,14 +8,14 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 
 
 class ProjectCreate(BaseModel):
-    owner: int
+    owner: str
     API_KEY: str
     name: str
 
 
 class ProjectResponse(BaseModel):
-    id: int
-    owner: int
+    id: str
+    owner: str
     API_KEY: str
     created_at: str
     name: str
@@ -83,7 +83,7 @@ def create_project(project: ProjectCreate) -> ProjectResponse:
 
 
 @router.get("/owner/{owner_id}", response_model=List[ProjectWithCallsResponse])
-def list_projects_by_owner(owner_id: int) -> List[ProjectWithCallsResponse]:
+def list_projects_by_owner(owner_id: str) -> List[ProjectWithCallsResponse]:
     """List all projects owned by a specific user with call counts."""
     try:
         client = get_client()
@@ -139,7 +139,7 @@ def list_projects() -> List[ProjectWithCallsResponse]:
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
-def get_project(project_id: int) -> ProjectResponse:
+def get_project(project_id: str) -> ProjectResponse:
     """Get a specific project by ID."""
     try:
         client = get_client()
@@ -156,7 +156,7 @@ def get_project(project_id: int) -> ProjectResponse:
 
 
 @router.put("/{project_id}", response_model=ProjectResponse)
-def update_project(project_id: int, project: ProjectCreate) -> ProjectResponse:
+def update_project(project_id: str, project: ProjectCreate) -> ProjectResponse:
     """Update a project."""
     try:
         client = get_client()
@@ -177,7 +177,7 @@ def update_project(project_id: int, project: ProjectCreate) -> ProjectResponse:
 
 
 @router.patch("/{project_id}/webhook", response_model=ProjectResponse)
-def update_webhook(project_id: int, body: WebhookUpdate) -> ProjectResponse:
+def update_webhook(project_id: str, body: WebhookUpdate) -> ProjectResponse:
     """Save or clear the Slack webhook URL for a project."""
     try:
         client = get_client()
@@ -210,7 +210,7 @@ def update_webhook(project_id: int, body: WebhookUpdate) -> ProjectResponse:
 
 
 @router.post("/{project_id}/webhook/test")
-def test_webhook(project_id: int) -> dict:
+def test_webhook(project_id: str) -> dict:
     """Send a test ping to the project's configured Slack webhook."""
     try:
         client = get_client()
@@ -228,7 +228,7 @@ def test_webhook(project_id: int) -> dict:
 
 
 @router.get("/{project_id}/usage")
-def get_usage(project_id: int) -> dict:
+def get_usage(project_id: str) -> dict:
     """Return usage/billing summary for a project."""
     try:
         from datetime import datetime, timezone
@@ -263,7 +263,7 @@ def get_usage(project_id: int) -> dict:
 
 
 @router.get("/{project_id}/thresholds")
-def get_thresholds(project_id: int) -> dict:
+def get_thresholds(project_id: str) -> dict:
     """Return current L4 anomaly thresholds for a project (dynamic or static)."""
     try:
         client = get_client()
@@ -331,7 +331,7 @@ def get_thresholds(project_id: int) -> dict:
 
 
 @router.delete("/{project_id}")
-def delete_project(project_id: int) -> dict:
+def delete_project(project_id: str) -> dict:
     """Delete a project"""
     try:
         client = get_client()
