@@ -8,7 +8,7 @@ Code ranges:
     L1 hard        1001-1099
     L2 format      2001-2099   (regex / contract violations)
     L4 integers    4001-4099   (static thresholds + cross-field)
-    L5 statistical 5001-5099   (z-score deviations from per-step baseline)
+    L5 statistical 5001-5099   (IQR/log-normal Tukey fence deviations from per-step baseline)
 """
 
 from __future__ import annotations
@@ -155,29 +155,30 @@ _L4: list[ConditionDef] = [
     ),
 ]
 
-# --- L5 statistical: z-score deviations from per-step-profile baselines.
-# Only fires when a StepBaseline is available for the current step (≥20 samples).
+# --- L5 statistical: IQR/log-normal Tukey fence deviations from per-step-profile
+# baselines. Only fires when a StepBaseline is available (≥20 samples). Fence is
+# computed in log space — multiplicative detection suited to right-skewed LLM data.
 # Owns latency/tokens/cost when active — L4's 4001/4002/4003 defer to these. ---
 _L5: list[ConditionDef] = [
     ConditionDef(
-        5001, "L5_statistical", "latency_zscore",  30.0,
-        "Call latency deviates more than 3σ from this step's historical mean.",
-        "layer_5_statistical.run_layer_5_statistical:latency_zscore",
+        5001, "L5_statistical", "latency_iqr_fence", 30.0,
+        "Call latency falls outside the Tukey fence in log space (multiplicative latency spike vs this step's baseline).",
+        "layer_5_statistical.run_layer_5_statistical:latency_iqr_fence",
     ),
     ConditionDef(
-        5002, "L5_statistical", "tokens_zscore", 25.0,
-        "Total tokens deviate more than 3σ from this step's historical mean.",
-        "layer_5_statistical.run_layer_5_statistical:tokens_zscore",
+        5002, "L5_statistical", "tokens_iqr_fence", 25.0,
+        "Total token count falls outside the Tukey fence — abnormally large or small output for this step.",
+        "layer_5_statistical.run_layer_5_statistical:tokens_iqr_fence",
     ),
     ConditionDef(
-        5003, "L5_statistical", "cost_zscore", 20.0,
-        "Call cost deviates more than 3σ from this step's historical mean.",
-        "layer_5_statistical.run_layer_5_statistical:cost_zscore",
+        5003, "L5_statistical", "cost_iqr_fence", 20.0,
+        "Call cost falls outside the Tukey fence — typically caused by unexpected token growth.",
+        "layer_5_statistical.run_layer_5_statistical:cost_iqr_fence",
     ),
     ConditionDef(
-        5004, "L5_statistical", "output_tokens_zscore", 20.0,
-        "Output tokens deviate more than 3σ from this step's historical mean.",
-        "layer_5_statistical.run_layer_5_statistical:output_tokens_zscore",
+        5004, "L5_statistical", "output_tokens_iqr_fence", 20.0,
+        "Output token count falls outside the Tukey fence, independent of input size.",
+        "layer_5_statistical.run_layer_5_statistical:output_tokens_iqr_fence",
     ),
 ]
 
