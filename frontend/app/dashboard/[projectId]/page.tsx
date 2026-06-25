@@ -1260,8 +1260,8 @@ function StepsHealthTab({ health }: { health: StepHealthRow[] }) {
                     <span className="text-gray-700">baseline <span className="text-gray-400">{fmtMetric(t.metric, t.baseline_mean)}</span></span>
                     <span className={t.direction === 'up' ? 'text-red-400' : 'text-blue-400'}>{t.direction === 'up' ? '↑' : '↓'}</span>
                     <span className="text-gray-700">recent <span className={isCritical ? 'text-red-300' : 'text-yellow-300'}>{fmtMetric(t.metric, t.recent_mean)}</span></span>
-                    <span className={['ml-auto shrink-0 font-bold', Math.abs(t.sigma) >= 3 ? 'text-red-400' : 'text-yellow-500'].join(' ')}>
-                      {t.sigma > 0 ? '+' : ''}{t.sigma}σ
+                    <span className={['ml-auto shrink-0 font-bold', Math.abs(t.sigma) >= 2.5 ? 'text-red-400' : 'text-yellow-500'].join(' ')}>
+                      {t.sigma > 0 ? '+' : ''}{t.sigma}×IQR
                     </span>
                   </div>
                 ))}

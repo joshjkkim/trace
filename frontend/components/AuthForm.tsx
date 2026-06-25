@@ -18,6 +18,8 @@ function extractMessage(err: unknown): string {
   return 'Something went wrong';
 }
 
+const inputCls = 'w-full bg-black border border-white/8 px-3 py-2.5 font-mono text-xs text-gray-300 placeholder-gray-700 focus:outline-none focus:border-white/20';
+
 export default function AuthForm() {
   const router = useRouter();
   const [mode, setMode]         = useState<Mode>('signin');
@@ -32,7 +34,6 @@ export default function AuthForm() {
     setError(null);
     setInfo(null);
     setLoading(true);
-
     try {
       if (mode === 'forgot') {
         const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -40,7 +41,7 @@ export default function AuthForm() {
           redirectTo: `${origin}/reset-password`,
         });
         if (resetError) throw resetError;
-        setInfo('Check your email for a reset link. Note: Supabase limits 2 reset emails per hour.');
+        setInfo('Check your email for a reset link. Supabase limits 2 reset emails per hour.');
       } else if (mode === 'signup') {
         const { error: signUpError } = await supabase.auth.signUp({ email, password });
         if (signUpError) throw signUpError;
@@ -59,106 +60,70 @@ export default function AuthForm() {
 
   if (mode === 'forgot') {
     return (
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-8">
-        <div className="mb-6">
-          <h2 className="text-sm font-semibold text-gray-200">Reset password</h2>
-          <p className="text-xs text-gray-500 mt-1">
-            Enter your email and we&apos;ll send a reset link.
-          </p>
-        </div>
+      <div className="bg-[#0a0a0a] border border-white/8 p-8">
+        <h2 className="font-sans font-black text-sm text-white mb-1">Reset password</h2>
+        <p className="font-mono text-[11px] text-gray-600 mb-6">
+          Enter your email and we&apos;ll send a reset link.
+        </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs text-gray-400 mb-1.5">Email</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-gray-500"
-            />
+            <label className="block font-mono text-[10px] text-gray-700 uppercase tracking-widest mb-1.5">Email</label>
+            <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" className={inputCls} />
           </div>
-          {error && <p className="text-red-400 text-xs">{error}</p>}
-          {info  && <p className="text-green-400 text-xs">{info}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-white text-gray-950 rounded-lg py-2 text-sm font-medium hover:bg-gray-100 disabled:opacity-50 transition-colors"
-          >
-            {loading ? 'Sending…' : 'Send reset link'}
+          {error && <p className="font-mono text-[11px] text-red-400">{error}</p>}
+          {info  && <p className="font-mono text-[11px] text-green-500">{info}</p>}
+          <button type="submit" disabled={loading} className="w-full bg-white text-black py-2.5 font-mono text-xs font-bold hover:bg-gray-100 disabled:opacity-50 transition-colors">
+            {loading ? 'sending…' : 'send reset link'}
           </button>
         </form>
         <button
           onClick={() => { setMode('signin'); setError(null); setInfo(null); }}
-          className="mt-4 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+          className="mt-5 font-mono text-[11px] text-gray-700 hover:text-white transition-colors"
         >
-          ← Back to sign in
+          ← back to sign in
         </button>
       </div>
     );
   }
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-8">
-      <div className="flex gap-1 mb-8 bg-gray-800 rounded-lg p-1">
-        {(['signin', 'signup'] as ('signin' | 'signup')[]).map((m) => (
+    <div className="bg-[#0a0a0a] border border-white/8">
+      {/* Tab switcher */}
+      <div className="flex border-b border-white/8">
+        {(['signin', 'signup'] as const).map((m, i) => (
           <button
             key={m}
             onClick={() => { setMode(m); setError(null); setInfo(null); }}
             className={[
-              'flex-1 py-1.5 text-sm rounded-md font-medium transition-colors',
-              mode === m ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200',
+              'flex-1 py-3 font-mono text-xs transition-colors',
+              i === 0 ? 'border-r border-white/8' : '',
+              mode === m ? 'bg-white/5 text-white font-bold' : 'text-gray-600 hover:text-gray-300',
             ].join(' ')}
           >
-            {m === 'signin' ? 'Sign in' : 'Sign up'}
+            {m === 'signin' ? 'sign in' : 'sign up'}
           </button>
         ))}
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="p-8 space-y-4">
         <div>
-          <label className="block text-xs text-gray-400 mb-1.5">Email</label>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-gray-500"
-          />
+          <label className="block font-mono text-[10px] text-gray-700 uppercase tracking-widest mb-1.5">Email</label>
+          <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" className={inputCls} />
         </div>
-
         <div>
           <div className="flex items-center justify-between mb-1.5">
-            <label className="text-xs text-gray-400">Password</label>
+            <label className="font-mono text-[10px] text-gray-700 uppercase tracking-widest">Password</label>
             {mode === 'signin' && (
-              <button
-                type="button"
-                onClick={() => { setMode('forgot'); setError(null); setInfo(null); }}
-                className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
-              >
-                Forgot password?
+              <button type="button" onClick={() => { setMode('forgot'); setError(null); setInfo(null); }} className="font-mono text-[10px] text-gray-700 hover:text-white transition-colors">
+                forgot password?
               </button>
             )}
           </div>
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-gray-500"
-          />
+          <input type="password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" className={inputCls} />
         </div>
-
-        {error && <p className="text-red-400 text-xs">{error}</p>}
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-white text-gray-950 rounded-lg py-2 text-sm font-medium hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {loading ? 'Loading…' : mode === 'signin' ? 'Sign in' : 'Create account'}
+        {error && <p className="font-mono text-[11px] text-red-400">{error}</p>}
+        <button type="submit" disabled={loading} className="w-full bg-white text-black py-2.5 font-mono text-xs font-bold hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+          {loading ? 'loading…' : mode === 'signin' ? 'sign in' : 'create account'}
         </button>
       </form>
     </div>

@@ -4,20 +4,20 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
+const inputCls = 'w-full bg-black border border-white/8 px-3 py-2.5 font-mono text-xs text-gray-300 placeholder-gray-700 focus:outline-none focus:border-white/20';
+
 export default function ResetPasswordPage() {
   const router = useRouter();
-  const [ready, setReady]           = useState(false);
-  const [password, setPassword]     = useState('');
-  const [confirm, setConfirm]       = useState('');
-  const [msg, setMsg]               = useState<{ ok: boolean; text: string } | null>(null);
-  const [loading, setLoading]       = useState(false);
+  const [ready, setReady]       = useState(false);
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm]   = useState('');
+  const [msg, setMsg]           = useState<{ ok: boolean; text: string } | null>(null);
+  const [loading, setLoading]   = useState(false);
 
   useEffect(() => {
-    // Supabase fires SIGNED_IN with type RECOVERY when the email link is followed
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') setReady(true);
     });
-    // Also check if already in a recovery session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setReady(true);
     });
@@ -27,14 +27,8 @@ export default function ResetPasswordPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
-    if (password !== confirm) {
-      setMsg({ ok: false, text: 'Passwords do not match.' });
-      return;
-    }
-    if (password.length < 6) {
-      setMsg({ ok: false, text: 'Password must be at least 6 characters.' });
-      return;
-    }
+    if (password !== confirm) { setMsg({ ok: false, text: 'Passwords do not match.' }); return; }
+    if (password.length < 6)  { setMsg({ ok: false, text: 'Password must be at least 6 characters.' }); return; }
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
@@ -47,51 +41,32 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center p-4">
+    <main className="min-h-screen bg-black text-white antialiased flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <a href="/" className="text-2xl font-semibold tracking-tight text-white hover:opacity-80 transition-opacity">
+          <a href="/" className="inline-flex items-center gap-2 font-sans font-black text-lg text-white">
+            <img src="/logo.svg" alt="" className="w-5 h-5" />
             trace.ai
           </a>
-          <p className="text-gray-400 text-sm mt-2">Set a new password</p>
+          <p className="font-mono text-[11px] text-gray-600 mt-2">set a new password</p>
         </div>
 
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-8">
+        <div className="bg-[#0a0a0a] border border-white/8 p-8">
           {!ready ? (
-            <p className="text-sm text-gray-500 text-center">Verifying reset link…</p>
+            <p className="font-mono text-xs text-gray-700 text-center">verifying reset link…</p>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs text-gray-400 mb-1.5">New password</label>
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-gray-500"
-                />
+                <label className="block font-mono text-[10px] text-gray-700 uppercase tracking-widest mb-1.5">New password</label>
+                <input type="password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" className={inputCls} />
               </div>
               <div>
-                <label className="block text-xs text-gray-400 mb-1.5">Confirm password</label>
-                <input
-                  type="password"
-                  required
-                  value={confirm}
-                  onChange={e => setConfirm(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-gray-500"
-                />
+                <label className="block font-mono text-[10px] text-gray-700 uppercase tracking-widest mb-1.5">Confirm password</label>
+                <input type="password" required value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="••••••••" className={inputCls} />
               </div>
-              {msg && (
-                <p className={`text-xs ${msg.ok ? 'text-green-400' : 'text-red-400'}`}>{msg.text}</p>
-              )}
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-white text-gray-950 rounded-lg py-2 text-sm font-medium hover:bg-gray-100 disabled:opacity-50 transition-colors"
-              >
-                {loading ? 'Saving…' : 'Set new password'}
+              {msg && <p className={`font-mono text-[11px] ${msg.ok ? 'text-green-500' : 'text-red-400'}`}>{msg.text}</p>}
+              <button type="submit" disabled={loading} className="w-full bg-white text-black py-2.5 font-mono text-xs font-bold hover:bg-gray-100 disabled:opacity-50 transition-colors">
+                {loading ? 'saving…' : 'set new password'}
               </button>
             </form>
           )}

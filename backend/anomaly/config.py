@@ -17,12 +17,14 @@ class EvalConfig(BaseModel):
     penalty_overrides: dict[int, float] = Field(default_factory=dict)
 
     # Per-step statistical baseline (L5). When present, L5 scores latency/tokens/
-    # cost as z-scores against this step's own history, and L4 defers its raw
-    # threshold checks (4001/4002/4003) to avoid double-counting the same metric.
+    # cost via IQR Tukey fences against this step's own history, and L4 defers
+    # its raw threshold checks (4001/4002/4003) to avoid double-counting.
     baseline: StepBaseline | None = None
 
-    # z-score magnitude beyond which an L5 metric deviation fires.
-    zscore_threshold: float = 3.0
+    # Tukey fence multiplier k: fence = Q3 + k*IQR (upper) / Q1 - k*IQR (lower).
+    # k=2.5 gives ~0.05% false positive rate on normal data; real LLM distributions
+    # are more skewed, so the log-space transform in MetricStat compensates.
+    iqr_fence_k: float = 2.5
 
     # Static numeric limits — consumed by L4 later. Defined now so config shape
     # is stable across layers.

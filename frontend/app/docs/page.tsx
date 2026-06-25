@@ -259,7 +259,7 @@ function SectionDetection() {
           { layer: 'L1', accent: 'border-red-600',    label: 'text-red-400',    title: 'Hard failures',        desc: 'Deterministic, non-heuristic. status_success=false, error present, token accounting mismatch (total ≠ input+output), negative counts. Any single hit → 100pts → immediate trigger.' },
           { layer: 'L2', accent: 'border-orange-600', label: 'text-orange-400', title: 'Format violations',    desc: 'Prompt-implied output contracts. Prompt asks for JSON but output isn\'t valid JSON. Yes/no prompt but output is prose. Enum step returned a non-enumerated value.' },
           { layer: 'L4', accent: 'border-blue-600',   label: 'text-blue-400',   title: 'Numeric thresholds',   desc: 'Static and adaptive p95 limits for latency, tokens, cost. Stall detection (high latency, near-zero output). Cross-field plausibility checks. Defers 4001/4002/4003 to L5 when baseline is active.' },
-          { layer: 'L5', accent: 'border-violet-600', label: 'text-violet-400', title: 'Statistical baseline', desc: 'Per-step z-score against that step\'s own historical mean and std. Activates after 20 clean calls. A high-variance step automatically gets a wider band. Owns latency/tokens/cost scoring when active.' },
+          { layer: 'L5', accent: 'border-violet-600', label: 'text-violet-400', title: 'Statistical baseline', desc: 'IQR/log-normal detection against each step\'s own call history. Tukey fence computed in log space — multiplicative detection (is this 5× the 75th percentile?) rather than additive. Activates after 20 clean calls. Owns latency/tokens/cost scoring when active.' },
         ].map((l) => (
           <div key={l.layer} className={`flex gap-4 px-4 py-4 border-l-2 ${l.accent} hover:bg-white/2 transition-colors`}>
             <span className={`font-mono text-xs font-bold shrink-0 w-6 mt-0.5 ${l.label}`}>{l.layer}</span>
@@ -283,28 +283,30 @@ function SectionDetection() {
       </Callout>
 
       <H2>L5 — statistical detection</H2>
-      <P>Once a step has 20+ calls, trace.ai computes a per-step baseline: the mean and standard deviation of latency, tokens, and cost. Each new call is scored as a z-score:</P>
-      <div className="border border-white/8 bg-black px-5 py-4 mb-5 font-mono text-sm text-gray-300">
-        z = (observed − mean) / std
+      <P>Once a step has 20+ calls, trace.ai builds a per-step baseline using IQR statistics in log space. Every metric (latency, tokens, cost) is treated as log-normal — the right model for LLM data, which is always positive and right-skewed. Detection uses the Tukey fence:</P>
+      <div className="border border-white/8 bg-black px-5 py-4 mb-5 font-mono text-sm text-gray-300 leading-7">
+        <div>upper fence = log(Q3) + k × log-IQR</div>
+        <div>lower fence = log(Q1) − k × log-IQR</div>
+        <div className="mt-2 text-gray-600 text-xs">k = 2.5 (default) · Q1/Q3 = 25th/75th percentile in log space</div>
       </div>
-      <P>If |z| &gt; 3, L5 fires. A step that normally takes 800ms ± 150ms std flags a 1,400ms call (z = +4.0) but not a 900ms call (z = +0.67).</P>
+      <P>A call fires L5 when log(observed) falls outside the fence. The reported score is how many IQR-widths beyond the fence the value sits — e.g. <code className="text-violet-400 font-mono">+3.2×IQR</code> means the log-value is 3.2 fence-widths above the upper fence. This is multiplicative detection: &quot;is this call 5× more expensive than the 75th percentile?&quot; rather than additive &quot;is this call $0.50 above the mean?&quot;</P>
       <Rows items={[
-        { key: '5001', label: 'latency_ms',    color: 'text-violet-400', value: 'Call latency deviates more than 3σ from this step\'s historical mean.' },
-        { key: '5002', label: 'total_tokens',  color: 'text-violet-400', value: 'Total tokens deviate more than 3σ from this step\'s mean.' },
-        { key: '5003', label: 'cost',          color: 'text-violet-400', value: 'Call cost deviates more than 3σ from this step\'s mean.' },
-        { key: '5004', label: 'output_tokens', color: 'text-violet-400', value: 'Output tokens deviate more than 3σ from this step\'s mean.' },
+        { key: '5001', label: 'latency_iqr_fence',    color: 'text-violet-400', value: 'Call latency falls outside the Tukey fence in log space (multiplicative latency spike).' },
+        { key: '5002', label: 'tokens_iqr_fence',     color: 'text-violet-400', value: 'Total token count falls outside the fence — abnormally large or small output for this step.' },
+        { key: '5003', label: 'cost_iqr_fence',       color: 'text-violet-400', value: 'Call cost falls outside the fence — typically caused by unexpected token growth.' },
+        { key: '5004', label: 'output_tokens_iqr_fence', color: 'text-violet-400', value: 'Output token count alone falls outside the fence, independent of input.' },
       ]} />
       <Callout type="tip">
-        <strong className="text-gray-300">Why z-score over p95?</strong> A fixed p95 ceiling treats all variation the same. Z-scores adapt to each step&apos;s natural variance — a creative generation step with high variance needs a wider band than a tight classification step. The std captures this automatically.
+        <strong className="text-gray-300">Why IQR/log-normal over z-score?</strong> Z-scores assume normal distribution and are sensitive to outliers — a single past latency spike inflates std, making the detector blind to future spikes. IQR uses the middle 50% of data (Q1–Q3) so outliers don&apos;t shift the fence. Log-space means the test is multiplicative, which matches how LLM anomalies actually manifest.
       </Callout>
       <P>Below 20 calls per step, L5 is inactive and L4&apos;s static thresholds serve as fallback. The baseline also excludes: calls using a different model, calls before the last prompt evolution timestamp, and calls that themselves triggered anomalies.</P>
 
       <H2>Trend detection</H2>
-      <P>The Steps tab compares each step&apos;s recent window (last 10 calls) against its baseline window (calls 11–60) to detect gradual degradation that per-call scoring misses.</P>
+      <P>The Steps tab compares each step&apos;s recent window (last 10 calls) against its baseline window (calls 11–60) to detect gradual degradation that per-call scoring misses. Uses the same IQR/log-normal model as L5 — the recent window mean is checked against the baseline Tukey fence. The reported deviation (<code className="text-violet-400 font-mono">+1.4×IQR</code>) is how many IQR-widths outside the fence the recent average sits.</P>
       <Rows items={[
-        { key: 'healthy',   color: 'text-green-500',  value: 'Recent metrics are within 1.5σ of baseline. No drift detected.' },
-        { key: 'degrading', color: 'text-yellow-500', value: 'At least one metric has drifted 1.5–3σ from baseline.' },
-        { key: 'critical',  color: 'text-red-500',    value: 'At least one metric has drifted more than 3σ from baseline.' },
+        { key: 'healthy',   color: 'text-green-500',  value: 'Recent mean is within the baseline IQR box (Q1–Q3). No drift.' },
+        { key: 'degrading', color: 'text-yellow-500', value: 'Recent mean has drifted outside the IQR box but within the Tukey fence. Early warning.' },
+        { key: 'critical',  color: 'text-red-500',    value: 'Recent mean is outside the Tukey fence (k=2.5). Significant regression — the average of the last 10 calls is anomalous by L5 standards.' },
         { key: 'warming',   color: 'text-gray-600',   value: 'Not enough call history yet. Shows progress toward the 20-call activation threshold.' },
       ]} />
       <P>Trend detection requires at least 30 calls per step (20 baseline + 10 recent). It catches slow latency creep, cost drift, and throughput degradation that individual call scores would miss.</P>

@@ -11,6 +11,8 @@ function generateApiKey(): string {
   return 'trace_' + Array.from({ length: 32 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
+const inputCls = 'w-full bg-black border border-white/8 px-3 py-2.5 font-mono text-xs text-gray-300 placeholder-gray-700 focus:outline-none focus:border-white/20';
+
 export default function CreateProject() {
   const router = useRouter();
   const [profileId, setProfileId] = useState<string | null>(null);
@@ -23,18 +25,10 @@ export default function CreateProject() {
 
   useEffect(() => {
     setApiKey(generateApiKey());
-
     async function loadProfile() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.replace('/'); return; }
-
-      const { data: profile, error: profileError } = await supabase
-        .from('PROFILES')
-        .select('id')
-        .eq('email', session.user.email)
-        .single();
-
-      console.log('[create-project] profile:', profile, 'error:', profileError);
+      const { data: profile } = await supabase.from('PROFILES').select('id').eq('email', session.user.email).single();
       if (profile) setProfileId(profile.id);
     }
     loadProfile();
@@ -44,19 +38,16 @@ export default function CreateProject() {
     if (!profileId || !name.trim()) return;
     setError(null);
     setLoading(true);
-
     try {
       const res = await fetch(`${BACKEND}/projects/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ owner: profileId, API_KEY: apiKey, name: name.trim() }),
       });
-
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.detail ?? `HTTP ${res.status}`);
       }
-
       const project = await res.json();
       setCreated({ id: project.id, apiKey, name: name.trim() });
     } catch (err: unknown) {
@@ -74,45 +65,55 @@ export default function CreateProject() {
 
   if (created) {
     return (
-      <main className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center p-4">
+      <main className="min-h-screen bg-black text-white antialiased flex items-center justify-center p-4">
         <div className="w-full max-w-md">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 space-y-6">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="w-2 h-2 rounded-full bg-green-400" />
-                <h2 className="text-sm font-medium text-gray-200">Project created — {created.name}</h2>
-              </div>
-              <p className="text-xs text-gray-500">Project ID: {created.id}</p>
-            </div>
+          <div className="bg-[#0a0a0a] border border-white/8">
 
-            <div>
-              <p className="text-xs text-gray-400 mb-2">Your API key — copy it now, it won't be shown again</p>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-green-300 font-mono truncate">
-                  {created.apiKey}
-                </code>
-                <button
-                  onClick={copyKey}
-                  className="shrink-0 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs text-gray-200 transition-colors"
-                >
-                  {copied ? 'Copied!' : 'Copy'}
-                </button>
+            {/* Header */}
+            <div className="border-b border-white/8 px-6 py-5 flex items-center gap-3">
+              <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+              <div>
+                <p className="font-sans font-black text-sm text-white">{created.name}</p>
+                <p className="font-mono text-[10px] text-gray-700 mt-0.5">project id: {created.id}</p>
               </div>
             </div>
 
-            <div className="bg-gray-800 rounded-lg p-4 text-xs font-mono text-gray-400 space-y-1">
-              <p className="text-gray-500 mb-2"># Use in your app:</p>
-              <p>{'const tracer = new Tracer({'}</p>
-              <p className="pl-4">{'apiKey: '}<span className="text-green-300">&apos;{created.apiKey}&apos;</span>,</p>
-              <p>{'});'}</p>
-            </div>
+            <div className="px-6 py-6 space-y-5">
+              {/* API key */}
+              <div>
+                <p className="font-mono text-[10px] text-gray-700 uppercase tracking-widest mb-2">
+                  API key — copy it now, it won&apos;t be shown again
+                </p>
+                <div className="flex items-center gap-2 border border-white/8 bg-black">
+                  <code className="flex-1 font-mono text-[11px] text-green-500 px-3 py-2.5 truncate">
+                    {created.apiKey}
+                  </code>
+                  <button
+                    onClick={copyKey}
+                    className="shrink-0 px-4 py-2.5 font-mono text-[11px] text-gray-600 hover:text-white border-l border-white/8 transition-colors"
+                  >
+                    {copied ? 'copied ✓' : 'copy'}
+                  </button>
+                </div>
+              </div>
 
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="w-full bg-white text-gray-950 rounded-lg py-2 text-sm font-medium hover:bg-gray-100 transition-colors"
-            >
-              Go to dashboard
-            </button>
+              {/* Code snippet */}
+              <div className="border border-white/8">
+                <div className="border-b border-white/8 px-4 py-2">
+                  <span className="font-mono text-[10px] text-gray-700 uppercase tracking-widest">typescript</span>
+                </div>
+                <pre className="px-4 py-4 font-mono text-[11px] text-violet-300 leading-6 overflow-x-auto">{`const tracer = new Tracer({
+  apiKey: '${created.apiKey}',
+})`}</pre>
+              </div>
+
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="w-full bg-white text-black py-2.5 font-mono text-xs font-bold hover:bg-gray-100 transition-colors"
+              >
+                go to dashboard →
+              </button>
+            </div>
           </div>
         </div>
       </main>
@@ -120,49 +121,51 @@ export default function CreateProject() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center p-4">
+    <main className="min-h-screen bg-black text-white antialiased flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 space-y-6">
-          <div>
-            <h1 className="text-lg font-semibold">New project</h1>
-            <p className="text-xs text-gray-500 mt-1">Creates a project and generates an SDK API key</p>
+        <div className="mb-8">
+          <a href="/dashboard" className="font-mono text-[11px] text-gray-700 hover:text-white transition-colors">← dashboard</a>
+        </div>
+        <div className="bg-[#0a0a0a] border border-white/8">
+          <div className="border-b border-white/8 px-6 py-5">
+            <h1 className="font-sans font-black text-lg text-white">New project</h1>
+            <p className="font-mono text-[11px] text-gray-600 mt-1">Creates a project and generates an SDK API key</p>
           </div>
 
-          <div>
-            <label className="block text-xs text-gray-400 mb-1.5">Project name</label>
-            <input
-              type="text"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="My AI app"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-gray-500"
-            />
-          </div>
+          <div className="px-6 py-6 space-y-5">
+            <div>
+              <label className="block font-mono text-[10px] text-gray-700 uppercase tracking-widest mb-1.5">Project name</label>
+              <input
+                type="text" required value={name} onChange={e => setName(e.target.value)}
+                placeholder="my-ai-app"
+                className={inputCls}
+              />
+            </div>
 
-          <div>
-            <p className="text-xs text-gray-400 mb-1.5">Generated API key</p>
-            <code className="block bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-green-300 font-mono truncate">
-              {apiKey || '—'}
-            </code>
-          </div>
+            <div>
+              <p className="font-mono text-[10px] text-gray-700 uppercase tracking-widest mb-1.5">Generated API key</p>
+              <code className="block border border-white/8 bg-black px-3 py-2.5 font-mono text-[11px] text-green-500 truncate">
+                {apiKey || '—'}
+              </code>
+            </div>
 
-          {error && <p className="text-red-400 text-xs">{error}</p>}
+            {error && <p className="font-mono text-[11px] text-red-400">{error}</p>}
 
-          <div className="flex gap-3">
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="flex-1 py-2 text-sm text-gray-400 hover:text-white border border-gray-700 rounded-lg transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleCreate}
-              disabled={loading || !profileId || !name.trim()}
-              className="flex-1 bg-white text-gray-950 rounded-lg py-2 text-sm font-medium hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {loading ? 'Creating…' : 'Create project'}
-            </button>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="flex-1 py-2.5 font-mono text-xs text-gray-600 hover:text-white border border-white/8 hover:border-white/20 transition-colors"
+              >
+                cancel
+              </button>
+              <button
+                onClick={handleCreate}
+                disabled={loading || !profileId || !name.trim()}
+                className="flex-1 bg-violet-600 hover:bg-violet-500 text-white py-2.5 font-mono text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {loading ? 'creating…' : 'create project'}
+              </button>
+            </div>
           </div>
         </div>
       </div>

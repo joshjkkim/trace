@@ -1,11 +1,20 @@
-"""Layer 5 — statistical deviation from per-step-profile baseline.
+"""Layer 5 — IQR/log-normal deviation from per-step-profile baseline.
 
-Only runs when EvalConfig.baseline is populated (computed upstream from the
-step_profile's call history). Each metric is scored as a z-score against the
-step's own mean/std — so a call is anomalous relative to *what this specific
-step normally does*, not a project-wide limit.
+Replaces the earlier z-score approach. LLM latency, cost, and token counts are
+right-skewed (log-normal in practice), so z-scores against mean/std are badly
+calibrated: the long tail inflates std, making true spikes look like 2σ events
+when they're really 10× outliers.
 
-Fires when |z| > config.zscore_threshold (default 3.0):
+Detection is now via the Tukey fence in log space:
+  anomalous  iff  log(x) > log(Q3) + k * log_IQR
+                  log(x) < log(Q1) - k * log_IQR
+
+k = EvalConfig.iqr_fence_k (default 2.5). The returned 'deviation' is how many
+IQR-widths (in log space) the value sits outside the fence — analogous to σ but
+distribution-free. A deviation of 0 means right at the fence; 1.0 means one full
+IQR-width beyond it.
+
+Fires when a baseline exists and deviation > 0:
   5001  latency_ms
   5002  total_tokens
   5003  cost
@@ -18,7 +27,7 @@ from __future__ import annotations
 
 from ..condition_registry import describe
 from ..config import EvalConfig
-from ..schemas import CallInput, EvalHit
+from ..schemas import CallInput, EvalHit, MetricStat
 
 
 def run_layer_5_statistical(payload: CallInput, config: EvalConfig) -> list[EvalHit]:
@@ -27,11 +36,23 @@ def run_layer_5_statistical(payload: CallInput, config: EvalConfig) -> list[Eval
         return []
 
     hits: list[EvalHit] = []
-    z_thresh = config.zscore_threshold
+    k = config.iqr_fence_k
 
-    def fire(code: int, z: float, observed: float, mean: float, std: float) -> None:
-        cond = describe(code)
-        direction = "above" if z > 0 else "below"
+    def fire(code: int, deviation: float, observed: float, stat: MetricStat) -> None:
+        cond      = describe(code)
+        direction = "above upper fence" if deviation > 0 else "below lower fence"
+        if stat.log_transform and stat.log_q1 is not None:
+            fence_desc = (
+                f"log-IQR fence: Q1={stat.q1:.2f} Q3={stat.q3:.2f} "
+                f"log_IQR={stat.log_iqr:.3f} k={k} "
+                f"(deviation={deviation:+.2f} IQR-widths, {direction})"
+            )
+        else:
+            fence_desc = (
+                f"IQR fence: Q1={stat.q1:.2f} Q3={stat.q3:.2f} "
+                f"IQR={stat.iqr:.2f} k={k} "
+                f"(deviation={deviation:+.2f} IQR-widths, {direction})"
+            )
         hits.append(EvalHit(
             condition_code=cond.code,
             layer=cond.layer,
@@ -41,19 +62,19 @@ def run_layer_5_statistical(payload: CallInput, config: EvalConfig) -> list[Eval
             penalty=config.penalty_for(cond.code, cond.penalty),
             message=cond.description,
             observed=round(observed, 4),
-            expected=f"{round(mean, 2)} ± {round(std, 2)} (z={z:+.2f}, {direction} {z_thresh}σ threshold)",
+            expected=fence_desc,
         ))
 
-    def check(code: int, stat, observed: float | None) -> None:
+    def check(code: int, stat: MetricStat | None, observed: float | None) -> None:
         if stat is None or observed is None:
             return
-        z = stat.zscore(observed)
-        if z is not None and abs(z) > z_thresh:
-            fire(code, z, observed, stat.mean, stat.std)
+        deviation = stat.iqr_deviation(observed, k=k)
+        if deviation is not None:
+            fire(code, deviation, observed, stat)
 
-    check(5001, baseline.latency_ms,     payload.latency_ms)
-    check(5002, baseline.total_tokens,   payload.total_tokens)
-    check(5003, baseline.cost,           payload.cost)
-    check(5004, baseline.output_tokens,  payload.output_tokens)
+    check(5001, baseline.latency_ms,    payload.latency_ms)
+    check(5002, baseline.total_tokens,  payload.total_tokens)
+    check(5003, baseline.cost,          payload.cost)
+    check(5004, baseline.output_tokens, payload.output_tokens)
 
     return hits

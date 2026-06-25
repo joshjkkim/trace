@@ -25,13 +25,48 @@ MIN_SAMPLES = 20
 HISTORY_LIMIT = 200
 
 
-def _stat(values: list[float]) -> MetricStat | None:
+def _percentile(sorted_vals: list[float], p: float) -> float:
+    """Linear interpolation percentile on a pre-sorted list, p in [0, 1]."""
+    n = len(sorted_vals)
+    pos = p * (n - 1)
+    lo  = int(pos)
+    hi  = min(lo + 1, n - 1)
+    return sorted_vals[lo] + (sorted_vals[hi] - sorted_vals[lo]) * (pos - lo)
+
+
+def _stat(values: list[float], log_transform: bool = True) -> MetricStat | None:
+    """Compute IQR-based MetricStat from a list of positive metric values.
+
+    log_transform=True (default for all LLM metrics) computes Tukey fences in
+    log space so the test is multiplicative ('3× the 75th percentile') rather
+    than additive ('500ms above the 75th percentile'). This matches the actual
+    log-normal shape of latency/cost/token distributions.
+    """
     n = len(values)
     if n < MIN_SAMPLES:
         return None
-    mean = sum(values) / n
-    variance = sum((v - mean) ** 2 for v in values) / n
-    return MetricStat(mean=mean, std=math.sqrt(variance), count=n)
+
+    s   = sorted(values)
+    q1  = _percentile(s, 0.25)
+    med = _percentile(s, 0.50)
+    q3  = _percentile(s, 0.75)
+    iqr = q3 - q1
+
+    log_q1 = log_q3 = log_iqr = None
+    if log_transform:
+        pos_vals = [v for v in s if v > 0]
+        if len(pos_vals) >= MIN_SAMPLES:
+            ls     = [math.log(v) for v in pos_vals]
+            log_q1 = _percentile(ls, 0.25)
+            log_q3 = _percentile(ls, 0.75)
+            log_iqr = log_q3 - log_q1
+
+    return MetricStat(
+        count=n,
+        log_transform=log_transform,
+        q1=q1, median=med, q3=q3, iqr=iqr,
+        log_q1=log_q1, log_q3=log_q3, log_iqr=log_iqr,
+    )
 
 
 def compute_baseline(step_profile_id: str, model: str | None = None) -> StepBaseline | None:
