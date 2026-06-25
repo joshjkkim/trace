@@ -7,8 +7,8 @@ scattered in the layer files — layers only reference codes via `describe()`.
 Code ranges:
     L1 hard        1001-1099
     L2 format      2001-2099   (regex / contract violations)
-    L3 fingerprint 3001-3099   (shape + structural features)
     L4 integers    4001-4099   (static thresholds + cross-field)
+    L5 statistical 5001-5099   (z-score deviations from per-step baseline)
 """
 
 from __future__ import annotations
@@ -99,37 +99,6 @@ _L2: list[ConditionDef] = [
     ),
 ]
 
-# --- L3 fingerprint: heuristic shape + structural feature checks (no ML, no
-# history). Compares inferred expected shape against the classified output shape
-# and inspects structure (brackets, keys, word/length ratios). ---
-_L3: list[ConditionDef] = [
-    ConditionDef(
-        3010, "L3_fingerprint", "word_count_exceeded", 20.0,
-        "Prompt capped the answer length (e.g. 'one word') but output is longer.",
-        "layer_3_fingerprinting.run_layer_3_fingerprinting:word_count",
-    ),
-    ConditionDef(
-        3011, "L3_fingerprint", "bracket_imbalance", 25.0,
-        "Output has unbalanced {} or [] brackets (malformed structure).",
-        "layer_3_fingerprinting.run_layer_3_fingerprinting:bracket_balance",
-    ),
-    ConditionDef(
-        3012, "L3_fingerprint", "json_key_missing", 30.0,
-        "Keys named in the prompt's JSON example are missing from the output.",
-        "layer_3_fingerprinting.run_layer_3_fingerprinting:json_keys",
-    ),
-    ConditionDef(
-        3013, "L3_fingerprint", "output_bloat_ratio", 20.0,
-        "Output is far larger than the prompt for a classify/enum-style step.",
-        "layer_3_fingerprinting.run_layer_3_fingerprinting:bloat_ratio",
-    ),
-    ConditionDef(
-        3014, "L3_fingerprint", "prompt_output_shape_mismatch", 30.0,
-        "Classified output shape does not match the shape implied by the prompt.",
-        "layer_3_fingerprinting.run_layer_3_fingerprinting:shape_mismatch",
-    ),
-]
-
 # --- L4 integers: static numeric limits plus cross-field plausibility. Reads
 # limits / step_limits from EvalConfig and shape hints from shape_classifier.
 # Penalties are individually small — several must fire to cross threshold. ---
@@ -213,7 +182,7 @@ _L5: list[ConditionDef] = [
 ]
 
 CONDITION_REGISTRY: dict[int, ConditionDef] = {
-    c.code: c for c in (*_L1, *_L2, *_L3, *_L4, *_L5)
+    c.code: c for c in (*_L1, *_L2, *_L4, *_L5)
 }
 
 

@@ -1,10 +1,17 @@
 """Compute per-step-profile statistical baselines from call history.
 
-Called inside the fingerprint→anomaly background thread, after the step_profile_id
-is known. Queries the last N calls for that profile, computes mean+std for each
-metric, and returns a StepBaseline to inject into EvalConfig before L5 runs.
+Three hardening rules applied to the query:
+  1. Model-scoped  — only calls using the same model as the current call,
+                     so a haiku→sonnet switch doesn't mix two latency distributions.
+  2. Evolution-cut — only calls after last_evolved_at on the profile, so a
+                     meaningful prompt rewrite forces a clean re-warm instead of
+                     blending old and new behaviour.
+  3. Anomaly-free  — excludes calls that themselves triggered anomalies, so a
+                     sustained degradation period doesn't shift the mean and widen
+                     the std until L5 goes blind to it.
 
-Minimum 20 samples required — returns None if history is too thin.
+Returns None when fewer than MIN_SAMPLES clean calls exist after filtering —
+the caller falls back to L4 static thresholds in that case.
 """
 
 from __future__ import annotations
@@ -27,19 +34,46 @@ def _stat(values: list[float]) -> MetricStat | None:
     return MetricStat(mean=mean, std=math.sqrt(variance), count=n)
 
 
-def compute_baseline(step_profile_id: str) -> StepBaseline | None:
+def compute_baseline(step_profile_id: str, model: str | None = None) -> StepBaseline | None:
     """Return a StepBaseline for the given profile, or None if not enough data."""
     try:
-        res = (
+        # Rule 2: find the evolution cutoff timestamp for this profile
+        last_evolved_at: str | None = None
+        try:
+            prof = (
+                get_client()
+                .table("step_profiles")
+                .select("last_evolved_at")
+                .eq("id", step_profile_id)
+                .single()
+                .execute()
+            )
+            last_evolved_at = prof.data.get("last_evolved_at") if prof.data else None
+        except Exception:
+            pass
+
+        query = (
             get_client()
             .table("CALLS")
             .select("latency_ms,total_tokens,output_tokens,cost")
             .eq("step_profile_id", step_profile_id)
             .eq("status_success", True)
+            # Rule 3: exclude calls that themselves triggered anomalies;
+            # NULL means the column didn't exist yet — treat as non-anomalous
+            .or_("anomaly_triggered.is.null,anomaly_triggered.eq.false")
             .order("created_at", desc=True)
             .limit(HISTORY_LIMIT)
-            .execute()
         )
+
+        # Rule 1: scope to same model so latency distributions don't cross-contaminate
+        if model:
+            query = query.eq("model", model)
+
+        # Rule 2: discard calls from before the last prompt evolution
+        if last_evolved_at:
+            query = query.gte("created_at", last_evolved_at)
+
+        res = query.execute()
         rows = res.data or []
         if len(rows) < MIN_SAMPLES:
             return None

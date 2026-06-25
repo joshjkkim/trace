@@ -12,9 +12,9 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 # Where a condition lives. Stable strings — also used in EvalResult.stopped_at_layer.
-LayerId = Literal["L1_hard", "L2_format", "L3_fingerprint", "L4_integers", "L5_statistical"]
+LayerId = Literal["L1_hard", "L2_format", "L4_integers", "L5_statistical"]
 
-# Dumb-down classification of a prompt or output blob (used by L3 later).
+# Coarse shape classification — used by L4 cross-field checks and EvalResult UI fields.
 OutputShape = Literal[
     "empty", "json", "code", "prose", "enum_short",
     "list", "markdown", "number", "unknown",
@@ -99,7 +99,7 @@ class EvalResult(BaseModel):
     hits: list[EvalHit] = Field(default_factory=list)
     error_map: dict[int, float] = Field(default_factory=dict)
 
-    # Optional UI/debug fingerprint fields (populated by L3 later).
+    # Optional UI/debug shape fields — populated by shape_classifier in evaluate_call.
     prompt_shape: OutputShape | None = None
     output_shape: OutputShape | None = None
 

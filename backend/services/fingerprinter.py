@@ -93,15 +93,14 @@ def match_or_create_profile(
             similarity = match["similarity"]
             profile_id = match["id"]
 
-            # Keep step_name and last_seen_at current
-            db.table("step_profiles").update({
-                "step_name":    step_name,
-                "last_seen_at": "now()",
-            }).eq("id", profile_id).execute()
-
             status = "matched" if similarity >= MATCH_THRESHOLD else "evolved"
+
+            updates: dict = {"step_name": step_name, "last_seen_at": "now()"}
             if status == "evolved":
-                print(f"[fingerprint] step evolved: {step_name} similarity={similarity:.3f}")
+                updates["last_evolved_at"] = "now()"
+                print(f"[fingerprint] step evolved: {step_name} similarity={similarity:.3f} — baseline reset")
+
+            db.table("step_profiles").update(updates).eq("id", profile_id).execute()
             return profile_id, status
 
         # No match — create new profile

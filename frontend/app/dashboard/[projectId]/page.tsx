@@ -3,6 +3,7 @@
 import { useEffect, useState, use, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { Badge, StatCard, SearchInput, EmptyState, SegmentedControl, Toggle } from '@/components/ui';
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
 
@@ -119,10 +120,9 @@ function groupAnomalies(rows: AnomalyRow[]): AnomalyRun[] {
     if (!step) { step = { step_name: row.step_name, codes: [] }; run.steps.push(step); }
     step.codes.push({ code: row.error_code, score: row.penalty_score });
   }
-  return Array.from(map.values()).sort((a, b) =>
-    b.latest_at.localeCompare(a.latest_at)
-  );
+  return Array.from(map.values()).sort((a, b) => b.latest_at.localeCompare(a.latest_at));
 }
+
 type ConnectionStatus = 'connecting' | 'connected' | 'error';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -151,15 +151,14 @@ function groupIntoRuns(calls: Call[]): Run[] {
 type TimeRange = '15m' | '1h' | '6h' | '24h' | '7d' | '30d';
 
 const RANGES: Record<TimeRange, { label: string; hours: number; buckets: number }> = {
-  '15m': { label: '15m', hours: 0.25,  buckets: 15  },
-  '1h':  { label: '1h',  hours: 1,     buckets: 12  },
-  '6h':  { label: '6h',  hours: 6,     buckets: 12  },
-  '24h': { label: '24h', hours: 24,    buckets: 24  },
-  '7d':  { label: '7d',  hours: 168,   buckets: 28  },
-  '30d': { label: '30d', hours: 720,   buckets: 30  },
+  '15m': { label: '15m', hours: 0.25, buckets: 15 },
+  '1h':  { label: '1h',  hours: 1,    buckets: 12 },
+  '6h':  { label: '6h',  hours: 6,    buckets: 12 },
+  '24h': { label: '24h', hours: 24,   buckets: 24 },
+  '7d':  { label: '7d',  hours: 168,  buckets: 28 },
+  '30d': { label: '30d', hours: 720,  buckets: 30 },
 };
 
-// Bucket calls into N equal time windows over the last `hours` hours
 function timeBuckets(calls: Call[], bucketCount = 24, hours = 24) {
   const now = Date.now();
   const windowMs = hours * 3600_000;
@@ -210,16 +209,10 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
   const [stepHealth, setStepHealth]       = useState<StepHealthRow[]>([]);
 
   const runs = useMemo(() => groupIntoRuns(calls), [calls]);
-  const selectedRun = useMemo(
-    () => runs.find((r) => r.runId === selectedRunId) ?? null,
-    [runs, selectedRunId],
-  );
+  const selectedRun = useMemo(() => runs.find((r) => r.runId === selectedRunId) ?? null, [runs, selectedRunId]);
   const anomalyRuns = useMemo(() => groupAnomalies(anomalies), [anomalies]);
   const criticalCount = anomalyRuns.filter((r) => r.is_critical).length;
-  const anomalyMap = useMemo(
-    () => new Map(anomalyRuns.map((r) => [r.run_id, r])),
-    [anomalyRuns],
-  );
+  const anomalyMap = useMemo(() => new Map(anomalyRuns.map((r) => [r.run_id, r])), [anomalyRuns]);
 
   async function analyzeRun(runId: string) {
     setAnalyzing(true);
@@ -293,13 +286,12 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
     return () => { supabase.removeChannel(channel); };
   }, [projectId]);
 
-
   if (authError) {
     return (
-      <main className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center">
+      <main className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">
-          <p className="text-red-400 text-sm mb-4">You don't have access to this project.</p>
-          <a href="/dashboard" className="text-gray-400 hover:text-white text-sm underline">Back to dashboard</a>
+          <p className="font-mono text-xs text-red-400 mb-4">You don&apos;t have access to this project.</p>
+          <a href="/dashboard" className="font-mono text-xs text-gray-600 hover:text-white underline">← back to dashboard</a>
         </div>
       </main>
     );
@@ -307,8 +299,8 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
 
   if (!project) {
     return (
-      <main className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center">
-        <p className="text-gray-600 text-sm">Loading…</p>
+      <main className="min-h-screen bg-black text-white flex items-center justify-center">
+        <p className="font-mono text-xs text-gray-700">loading…</p>
       </main>
     );
   }
@@ -316,54 +308,55 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
   const degradingCount = stepHealth.filter(s => s.status !== 'healthy').length;
 
   const TABS: { id: Tab; label: string }[] = [
-    { id: 'overview',  label: 'Overview' },
-    { id: 'logs',      label: 'Logs' },
-    { id: 'runs',      label: `Runs${runs.length ? ` (${runs.length})` : ''}` },
-    { id: 'anomalies', label: `Anomalies${criticalCount ? ` (${criticalCount} critical)` : anomalyRuns.length ? ` (${anomalyRuns.length})` : ''}` },
-    { id: 'steps',     label: `Steps${degradingCount ? ` (${degradingCount} drifting)` : ''}` },
-    { id: 'usage',     label: 'Usage' },
-    { id: 'settings',  label: 'Settings' },
+    { id: 'overview',  label: 'overview' },
+    { id: 'logs',      label: 'logs' },
+    { id: 'runs',      label: `runs${runs.length ? ` (${runs.length})` : ''}` },
+    { id: 'anomalies', label: `anomalies${criticalCount ? ` (${criticalCount} critical)` : anomalyRuns.length ? ` (${anomalyRuns.length})` : ''}` },
+    { id: 'steps',     label: `steps${degradingCount ? ` (${degradingCount} drifting)` : ''}` },
+    { id: 'usage',     label: 'usage' },
+    { id: 'settings',  label: 'settings' },
   ];
 
   return (
-    <main className="min-h-screen bg-gray-950 text-gray-100">
+    <main className="min-h-screen bg-black text-white antialiased">
+
       {/* Top bar */}
-      <div className="border-b border-gray-800 px-4 sm:px-8 py-4">
+      <div className="border-b border-white/8 px-4 sm:px-8 py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="flex items-center gap-2 text-sm">
-              <a href="/dashboard" className="text-gray-500 hover:text-gray-300 transition-colors shrink-0">Projects</a>
-              <span className="text-gray-700">/</span>
-              <span className="text-gray-100 font-medium truncate">{project.name}</span>
+            <div className="flex items-center gap-2 font-mono text-xs">
+              <a href="/dashboard" className="text-gray-600 hover:text-white transition-colors shrink-0">projects</a>
+              <span className="text-white/15">/</span>
+              <span className="text-white font-bold truncate">{project.name}</span>
             </div>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-1.5">
               <span className={[
                 'w-1.5 h-1.5 rounded-full shrink-0',
-                status === 'connected'  ? 'bg-green-400' : '',
-                status === 'connecting' ? 'bg-yellow-400 animate-pulse' : '',
+                status === 'connected'  ? 'bg-green-500' : '',
+                status === 'connecting' ? 'bg-yellow-500 animate-pulse' : '',
                 status === 'error'      ? 'bg-red-500' : '',
               ].join(' ')} />
-              <span className="text-gray-600 text-xs">
-                {status === 'connected' ? 'Live' : status === 'connecting' ? 'Connecting…' : 'Realtime error'}
+              <span className="font-mono text-[10px] text-gray-700">
+                {status === 'connected' ? 'live' : status === 'connecting' ? 'connecting…' : 'realtime error'}
               </span>
             </div>
           </div>
-          <code className="hidden sm:block text-xs text-green-400 font-mono bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 max-w-[200px] truncate shrink-0">
+          <code className="hidden sm:block font-mono text-[11px] text-green-500 border border-white/8 px-3 py-1.5 max-w-[200px] truncate shrink-0">
             {project.API_KEY}
           </code>
         </div>
 
         {/* Tab bar */}
-        <div className="max-w-6xl mx-auto flex gap-0.5 mt-4 overflow-x-auto scrollbar-none -mb-px">
+        <div className="max-w-6xl mx-auto flex gap-0 mt-4 overflow-x-auto scrollbar-none -mb-px">
           {TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => { setTab(t.id); setSelectedRunId(null); }}
               className={[
-                'px-3 py-1.5 text-xs sm:text-sm font-medium rounded-t border-b-2 transition-colors whitespace-nowrap shrink-0',
+                'px-4 py-2 font-mono text-xs border-b-2 transition-colors whitespace-nowrap shrink-0',
                 tab === t.id
-                  ? 'border-indigo-400 text-indigo-300'
-                  : 'border-transparent text-gray-500 hover:text-gray-300',
+                  ? 'border-violet-500 text-violet-400'
+                  : 'border-transparent text-gray-600 hover:text-gray-300',
               ].join(' ')}
             >
               {t.label}
@@ -374,67 +367,59 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
 
       <div className="max-w-6xl mx-auto px-4 sm:px-8 py-6">
 
-        {/* ── Overview ── */}
-        {tab === 'overview' && <OverviewTab calls={calls} />}
+        {tab === 'overview'  && <OverviewTab calls={calls} />}
 
-        {/* ── Logs ── */}
         {tab === 'logs' && (() => {
           const q = logsQuery.toLowerCase();
           const filtered = calls.filter(c =>
-            !q ||
-            (c.step_name ?? '').toLowerCase().includes(q) ||
-            (c.model ?? '').toLowerCase().includes(q) ||
-            (c.run_id ?? '').toLowerCase().includes(q) ||
-            (c.error ?? '').toLowerCase().includes(q)
+            !q || (c.step_name ?? '').toLowerCase().includes(q) || (c.model ?? '').toLowerCase().includes(q) ||
+            (c.run_id ?? '').toLowerCase().includes(q) || (c.error ?? '').toLowerCase().includes(q)
           );
           return calls.length === 0
             ? <EmptyState text="No calls yet — run your first trace to see logs here." />
             : (
               <div>
-                <SearchBar value={logsQuery} onChange={setLogsQuery} placeholder="Filter by step, model, run ID, error…" />
+                <SearchInput value={logsQuery} onChange={setLogsQuery} placeholder="Filter by step, model, run ID, error…" />
                 {filtered.length === 0
                   ? <EmptyState text="No calls match that filter." />
-                  : <div className="space-y-2">{filtered.map((c) => <CallRow key={`${c.id}`} call={c} anomaly={c.run_id ? anomalyMap.get(c.run_id) : undefined} onSelect={setSelectedCall} />)}</div>
+                  : <div className="bg-[#0a0a0a] border border-white/8 divide-y divide-white/8">{filtered.map((c) => <CallRow key={`${c.id}`} call={c} anomaly={c.run_id ? anomalyMap.get(c.run_id) : undefined} onSelect={setSelectedCall} />)}</div>
                 }
               </div>
             );
         })()}
 
-        {/* ── Runs ── */}
         {tab === 'runs' && !selectedRunId && (() => {
           const q = runsQuery.toLowerCase();
           const filtered = runs.filter(r =>
-            !q ||
-            r.runId.toLowerCase().includes(q) ||
+            !q || r.runId.toLowerCase().includes(q) ||
             r.steps.some(s => (s.step_name ?? '').toLowerCase().includes(q) || (s.model ?? '').toLowerCase().includes(q))
           );
           return runs.length === 0
             ? <EmptyState text="No runs yet." />
             : (
               <div>
-                <SearchBar value={runsQuery} onChange={setRunsQuery} placeholder="Filter by run ID, step name, model…" />
+                <SearchInput value={runsQuery} onChange={setRunsQuery} placeholder="Filter by run ID, step name, model…" />
                 {filtered.length === 0
                   ? <EmptyState text="No runs match that filter." />
-                  : <div className="space-y-2">{filtered.map((r) => <RunCard key={r.runId} run={r} anomaly={anomalyMap.get(r.runId)} onClick={() => setSelectedRunId(r.runId)} />)}</div>
+                  : <div className="bg-[#0a0a0a] border border-white/8 divide-y divide-white/8">{filtered.map((r) => <RunCard key={r.runId} run={r} anomaly={anomalyMap.get(r.runId)} onClick={() => setSelectedRunId(r.runId)} />)}</div>
                 }
               </div>
             );
         })()}
 
-        {/* ── Run detail / graph ── */}
         {tab === 'runs' && selectedRunId && selectedRun && (
           <div>
             <button
               onClick={() => { setSelectedRunId(null); setAnalysis(null); }}
-              className="text-gray-500 hover:text-gray-300 text-sm mb-6 transition-colors flex items-center gap-1.5"
+              className="font-mono text-xs text-gray-600 hover:text-white mb-6 transition-colors flex items-center gap-1.5"
             >
-              ← Runs
+              ← runs
             </button>
             <div className="mb-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
               <div className="min-w-0">
-                <p className="text-xs text-gray-500 mb-1">Run ID</p>
-                <code className="text-sm font-mono text-gray-300 break-all">{selectedRun.runId}</code>
-                <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-500">
+                <p className="font-mono text-[10px] text-gray-700 uppercase tracking-widest mb-1">Run ID</p>
+                <code className="font-mono text-xs text-gray-300 break-all">{selectedRun.runId}</code>
+                <div className="flex flex-wrap gap-4 mt-2 font-mono text-[11px] text-gray-600">
                   <span>{selectedRun.steps.length} steps</span>
                   <span>${selectedRun.totalCost.toFixed(6)}</span>
                   <span>{selectedRun.totalLatency}ms total</span>
@@ -444,13 +429,9 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
               <button
                 onClick={() => analyzeRun(selectedRun.runId)}
                 disabled={analyzing}
-                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-indigo-700 bg-indigo-950/60 text-indigo-300 hover:bg-indigo-900/60 hover:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 font-mono text-xs border border-violet-700/60 text-violet-400 hover:bg-violet-900/20 hover:border-violet-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
-                {analyzing ? (
-                  <><span className="animate-spin text-[10px]">◌</span> Analyzing…</>
-                ) : (
-                  <>✦ Analyze Run</>
-                )}
+                {analyzing ? <><span className="animate-spin text-[10px]">◌</span> analyzing…</> : <>✦ analyze run</>}
               </button>
             </div>
 
@@ -462,15 +443,10 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
           </div>
         )}
 
-        {/* ── Anomalies ── */}
         {tab === 'anomalies' && <AnomaliesTab runs={anomalyRuns} registry={conditionRegistry} />}
-
-        {/* ── Steps health ── */}
-        {tab === 'steps' && <StepsHealthTab health={stepHealth} />}
-
-        {/* ── Settings ── */}
-        {tab === 'usage'    && <UsageTab project={project} />}
-        {tab === 'settings' && <SettingsTab project={project} />}
+        {tab === 'steps'     && <StepsHealthTab health={stepHealth} />}
+        {tab === 'usage'     && <UsageTab project={project} />}
+        {tab === 'settings'  && <SettingsTab project={project} />}
 
       </div>
 
@@ -491,24 +467,6 @@ export default function ProjectPage({ params }: { params: Promise<{ projectId: s
 
 // ── Overview tab ──────────────────────────────────────────────────────────────
 
-function SearchBar({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
-  return (
-    <div className="relative mb-4">
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 text-xs pointer-events-none">⌕</span>
-      <input
-        type="text"
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder ?? 'Search…'}
-        className="w-full bg-gray-900 border border-gray-800 rounded-lg pl-7 pr-9 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gray-600"
-      />
-      {value && (
-        <button onClick={() => onChange('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-400 text-sm leading-none">×</button>
-      )}
-    </div>
-  );
-}
-
 function OverviewTab({ calls }: { calls: Call[] }) {
   const [range, setRange] = useState<TimeRange>('24h');
   const cfg = RANGES[range];
@@ -519,17 +477,12 @@ function OverviewTab({ calls }: { calls: Call[] }) {
   }, [calls, cfg.hours]);
 
   const filteredRuns = useMemo(() => groupIntoRuns(fc), [fc]);
-
-  const totalCost   = fc.reduce((s, c) => s + (c.cost ?? 0), 0);
-  const totalTokens = fc.reduce((s, c) => s + (c.total_tokens ?? 0), 0);
-  const errorCount  = fc.filter((c) => c.status_success === false).length;
-  const avgLatency  = fc.length ? Math.round(fc.reduce((s, c) => s + (c.latency_ms ?? 0), 0) / fc.length) : 0;
-  const errorRate   = fc.length ? (errorCount / fc.length) * 100 : 0;
-
-  const buckets   = useMemo(() => timeBuckets(fc, cfg.buckets, cfg.hours), [fc, cfg]);
-  const callData  = buckets.map((b) => b.calls);
-  const costData  = buckets.map((b) => b.cost);
-  const tokenData = buckets.map((b) => b.tokens);
+  const totalCost    = fc.reduce((s, c) => s + (c.cost ?? 0), 0);
+  const totalTokens  = fc.reduce((s, c) => s + (c.total_tokens ?? 0), 0);
+  const errorCount   = fc.filter((c) => c.status_success === false).length;
+  const avgLatency   = fc.length ? Math.round(fc.reduce((s, c) => s + (c.latency_ms ?? 0), 0) / fc.length) : 0;
+  const errorRate    = fc.length ? (errorCount / fc.length) * 100 : 0;
+  const buckets      = useMemo(() => timeBuckets(fc, cfg.buckets, cfg.hours), [fc, cfg]);
 
   const modelCounts: Record<string, { calls: number; cost: number }> = {};
   for (const c of fc) {
@@ -544,31 +497,17 @@ function OverviewTab({ calls }: { calls: Call[] }) {
   const firstLabel = buckets[0]?.label;
   const lastLabel  = buckets[buckets.length - 1]?.label;
 
+  const rangeOptions = (Object.keys(RANGES) as TimeRange[]).map(r => ({ value: r, label: RANGES[r].label }));
+
   return (
     <div className="space-y-6">
 
-      {/* Range picker */}
       <div className="flex justify-end">
-        <div className="flex bg-gray-900 border border-gray-800 rounded-lg p-0.5 gap-0.5">
-          {(Object.keys(RANGES) as TimeRange[]).map((r) => (
-            <button
-              key={r}
-              onClick={() => setRange(r)}
-              className={[
-                'px-3 py-1 text-xs font-medium rounded-md transition-colors',
-                range === r
-                  ? 'bg-gray-700 text-gray-100'
-                  : 'text-gray-500 hover:text-gray-300',
-              ].join(' ')}
-            >
-              {RANGES[r].label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl options={rangeOptions} value={range} onChange={setRange} />
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-px bg-white/8">
         <StatCard label="Runs"        value={filteredRuns.length.toString()} />
         <StatCard label="Calls"       value={fc.length.toString()} />
         <StatCard label="Total cost"  value={`$${totalCost.toFixed(4)}`} mono />
@@ -577,28 +516,27 @@ function OverviewTab({ calls }: { calls: Call[] }) {
         <StatCard label="Tokens"      value={totalTokens > 1000 ? `${(totalTokens / 1000).toFixed(1)}k` : totalTokens.toString()} />
       </div>
 
-      {/* Charts row */}
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <p className="text-xs text-gray-400 font-medium mb-4">Calls · {cfg.label}</p>
-          <BarChart data={callData} color="bg-indigo-500" />
+        <div className="lg:col-span-2 bg-[#0a0a0a] border border-white/8 p-5">
+          <p className="font-mono text-[10px] text-gray-700 uppercase tracking-widest mb-4">Calls · {cfg.label}</p>
+          <BarChart data={buckets.map(b => b.calls)} color="bg-violet-500" />
           <ChartAxis first={firstLabel} last={lastLabel} />
         </div>
-
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <p className="text-xs text-gray-400 font-medium mb-4">Models</p>
+        <div className="bg-[#0a0a0a] border border-white/8 p-5">
+          <p className="font-mono text-[10px] text-gray-700 uppercase tracking-widest mb-4">Models</p>
           {models.length === 0 ? (
-            <p className="text-gray-700 text-xs mt-8 text-center">No data</p>
+            <p className="font-mono text-xs text-gray-700 mt-8 text-center">no data</p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {models.map(([model, { calls: cnt, cost }]) => (
                 <div key={model}>
-                  <div className="flex justify-between items-baseline mb-1">
-                    <span className="text-xs font-mono text-gray-400 truncate max-w-[140px]">{model.replace('claude-', '')}</span>
-                    <span className="text-xs text-gray-500 shrink-0 ml-2">{cnt} · ${cost.toFixed(4)}</span>
+                  <div className="flex justify-between items-baseline mb-1.5">
+                    <span className="font-mono text-[11px] text-gray-400 truncate max-w-[140px]">{model.replace('claude-', '')}</span>
+                    <span className="font-mono text-[11px] text-gray-600 shrink-0 ml-2">{cnt} · ${cost.toFixed(4)}</span>
                   </div>
-                  <div className="h-1.5 bg-gray-800 rounded-full">
-                    <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${(cnt / totalModelCalls) * 100}%` }} />
+                  <div className="h-px bg-white/8">
+                    <div className="h-full bg-violet-500" style={{ width: `${(cnt / totalModelCalls) * 100}%` }} />
                   </div>
                 </div>
               ))}
@@ -607,31 +545,28 @@ function OverviewTab({ calls }: { calls: Call[] }) {
         </div>
       </div>
 
-      {/* Cost + tokens charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <p className="text-xs text-gray-400 font-medium mb-4">Cost · {cfg.label}</p>
-          <BarChart data={costData} color="bg-emerald-500" />
+        <div className="bg-[#0a0a0a] border border-white/8 p-5">
+          <p className="font-mono text-[10px] text-gray-700 uppercase tracking-widest mb-4">Cost · {cfg.label}</p>
+          <BarChart data={buckets.map(b => b.cost)} color="bg-emerald-500" />
           <ChartAxis first={firstLabel} last={lastLabel} />
         </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <p className="text-xs text-gray-400 font-medium mb-4">Tokens · {cfg.label}</p>
-          <BarChart data={tokenData} color="bg-violet-500" />
+        <div className="bg-[#0a0a0a] border border-white/8 p-5">
+          <p className="font-mono text-[10px] text-gray-700 uppercase tracking-widest mb-4">Tokens · {cfg.label}</p>
+          <BarChart data={buckets.map(b => b.tokens)} color="bg-blue-500" />
           <ChartAxis first={firstLabel} last={lastLabel} />
         </div>
       </div>
 
-      {/* Per-step breakdown */}
       <StepBreakdown calls={fc} />
 
-      {/* Recent errors */}
       {errorCount > 0 && (
-        <div className="bg-gray-900 border border-red-900/50 rounded-xl p-5">
-          <p className="text-xs text-red-400 font-medium mb-3">Recent errors</p>
+        <div className="border-l-2 border-red-600 pl-5 py-3">
+          <p className="font-mono text-[10px] text-red-600 uppercase tracking-widest mb-3">Recent errors</p>
           <div className="space-y-2">
             {fc.filter((c) => c.status_success === false).slice(0, 5).map((c) => (
-              <div key={c.id} className="flex items-start gap-3 text-xs font-mono">
-                <span className="text-red-500 shrink-0">✕</span>
+              <div key={c.id} className="flex items-start gap-3 font-mono text-[11px]">
+                <span className="text-red-600 shrink-0">✕</span>
                 <span className="text-gray-400 shrink-0">{c.step_name ?? '—'}</span>
                 <span className="text-red-400 truncate">{c.error ?? 'unknown error'}</span>
                 <span className="text-gray-700 shrink-0 ml-auto">
@@ -642,33 +577,21 @@ function OverviewTab({ calls }: { calls: Call[] }) {
           </div>
         </div>
       )}
-
     </div>
   );
 }
 
-// ── Small reusable components ─────────────────────────────────────────────────
-
-function StatCard({ label, value, mono, alert }: { label: string; value: string; mono?: boolean; alert?: boolean }) {
-  return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-4">
-      <p className="text-xs text-gray-500 mb-1.5">{label}</p>
-      <p className={['text-xl font-semibold tabular-nums', alert ? 'text-red-400' : 'text-gray-100', mono ? 'font-mono' : ''].join(' ')}>
-        {value}
-      </p>
-    </div>
-  );
-}
+// ── Small components ──────────────────────────────────────────────────────────
 
 function BarChart({ data, color }: { data: number[]; color: string }) {
   const max = Math.max(...data, 1);
   return (
-    <div className="flex items-end gap-0.5 h-20">
+    <div className="flex items-end gap-px h-20">
       {data.map((v, i) => (
         <div
           key={i}
-          className={`flex-1 rounded-sm ${color} transition-all`}
-          style={{ height: `${(v / max) * 100}%`, minHeight: v > 0 ? '3px' : '0', opacity: 0.75 }}
+          className={`flex-1 ${color} transition-all opacity-80`}
+          style={{ height: `${(v / max) * 100}%`, minHeight: v > 0 ? '2px' : '0' }}
         />
       ))}
     </div>
@@ -678,18 +601,14 @@ function BarChart({ data, color }: { data: number[]; color: string }) {
 function ChartAxis({ first, last }: { first?: Date; last?: Date }) {
   const fmt = (d?: Date) => d?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) ?? '';
   return (
-    <div className="flex justify-between mt-1.5">
-      <span className="text-[10px] text-gray-700">{fmt(first)}</span>
-      <span className="text-[10px] text-gray-700">{fmt(last)}</span>
+    <div className="flex justify-between mt-2">
+      <span className="font-mono text-[10px] text-gray-700">{fmt(first)}</span>
+      <span className="font-mono text-[10px] text-gray-700">{fmt(last)}</span>
     </div>
   );
 }
 
-function EmptyState({ text }: { text: string }) {
-  return <div className="text-center py-24 text-gray-600 text-sm">{text}</div>;
-}
-
-// ── Raw log row ───────────────────────────────────────────────────────────────
+// ── Call log row ──────────────────────────────────────────────────────────────
 
 function CallRow({ call, anomaly, onSelect }: { call: Call; anomaly?: AnomalyRun; onSelect: (c: Call) => void }) {
   const isError = call.status_success === false;
@@ -697,73 +616,69 @@ function CallRow({ call, anomaly, onSelect }: { call: Call; anomaly?: AnomalyRun
     <div
       onClick={() => onSelect(call)}
       className={[
-        'rounded-lg border px-4 py-3 font-mono text-xs grid grid-cols-[1fr_auto] gap-x-4 cursor-pointer transition-colors',
-        isError ? 'border-red-800 bg-red-950/40 hover:border-red-700'
-          : anomaly?.is_critical ? 'border-red-800/50 bg-red-950/20 hover:border-red-700/50'
-          : anomaly ? 'border-yellow-800/40 bg-yellow-950/10 hover:border-yellow-700/50'
-          : 'border-gray-800 bg-gray-900 hover:border-gray-600',
+        'border-l-2 px-4 py-3 font-mono text-xs grid grid-cols-[1fr_auto] gap-x-4 cursor-pointer hover:bg-white/2 transition-colors',
+        isError          ? 'border-red-600'
+          : anomaly?.is_critical ? 'border-red-600/50'
+          : anomaly              ? 'border-yellow-600/60'
+          : 'border-white/10',
       ].join(' ')}
     >
       <div className="space-y-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className={['text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wider',
-            isError ? 'bg-red-800 text-red-200' : 'bg-green-900 text-green-300'].join(' ')}>
-            {isError ? 'error' : 'ok'}
-          </span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge variant={isError ? 'error' : 'ok'}>{isError ? 'error' : 'ok'}</Badge>
           {anomaly && (
-            <span className={['text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wider',
-              anomaly.is_critical ? 'bg-red-900 text-red-300' : 'bg-yellow-900/60 text-yellow-400'].join(' ')}>
+            <Badge variant={anomaly.is_critical ? 'critical' : 'warning'}>
               {anomaly.is_critical ? `critical ${anomaly.total_score}pts` : `warn ${anomaly.total_score}pts`}
-            </span>
+            </Badge>
           )}
-          <span className="text-gray-200 font-semibold">{call.step_name ?? '—'}</span>
-          <span className="text-gray-500">{call.model ?? ''}</span>
+          <span className="text-gray-200 font-bold">{call.step_name ?? '—'}</span>
+          <span className="text-gray-600">{call.model ?? ''}</span>
           {call.step_index != null && <span className="text-gray-700">#{call.step_index + 1}</span>}
         </div>
         {isError && call.error && <div className="text-red-400 truncate">{call.error}</div>}
         {!isError && (
-          <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-gray-400">
-            <span><span className="text-gray-600">tokens </span>{call.input_tokens ?? 0} / {call.output_tokens ?? 0}</span>
-            {call.cost != null && <span><span className="text-gray-600">cost </span>${Number(call.cost).toFixed(6)}</span>}
+          <div className="flex flex-wrap gap-x-4 text-gray-600">
+            <span><span className="text-gray-700">tokens </span>{call.input_tokens ?? 0} / {call.output_tokens ?? 0}</span>
+            {call.cost != null && <span><span className="text-gray-700">cost </span>${Number(call.cost).toFixed(6)}</span>}
           </div>
         )}
         <div className="text-gray-700 truncate">run {call.run_id ?? '—'}</div>
       </div>
-      <div className="text-right text-gray-500 whitespace-nowrap">
+      <div className="text-right whitespace-nowrap">
         {call.latency_ms != null && <div className="text-gray-300">{call.latency_ms}ms</div>}
-        {call.created_at && <div className="text-gray-600 text-[10px]">{new Date(call.created_at).toLocaleTimeString()}</div>}
+        {call.created_at && <div className="text-gray-700 text-[10px]">{new Date(call.created_at).toLocaleTimeString()}</div>}
       </div>
     </div>
   );
 }
 
-// ── Run summary card ──────────────────────────────────────────────────────────
+// ── Run card ──────────────────────────────────────────────────────────────────
 
 function RunCard({ run, anomaly, onClick }: { run: Run; anomaly?: AnomalyRun; onClick: () => void }) {
   const hasError = run.errorCount > 0;
   return (
-    <button onClick={onClick} className={[
-      'w-full text-left border rounded-xl px-5 py-4 hover:border-gray-600 transition-colors',
-      anomaly?.is_critical ? 'bg-red-950/20 border-red-800/50 hover:border-red-700/60'
-        : anomaly ? 'bg-yellow-950/10 border-yellow-800/30 hover:border-yellow-700/50'
-        : 'bg-gray-900 border-gray-800',
-    ].join(' ')}>
+    <button
+      onClick={onClick}
+      className={[
+        'w-full text-left px-5 py-4 border-l-2 hover:bg-white/2 transition-colors',
+        anomaly?.is_critical ? 'border-red-600'
+          : anomaly ? 'border-yellow-600'
+          : hasError ? 'border-red-600/50'
+          : 'border-white/10',
+      ].join(' ')}
+    >
       <div className="flex items-center justify-between">
         <div className="space-y-1.5 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className={['text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wider',
-              hasError ? 'bg-red-800 text-red-200' : 'bg-green-900 text-green-300'].join(' ')}>
-              {hasError ? `${run.errorCount} err` : 'ok'}
-            </span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge variant={hasError ? 'error' : 'ok'}>{hasError ? `${run.errorCount} err` : 'ok'}</Badge>
             {anomaly && (
-              <span className={['text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wider',
-                anomaly.is_critical ? 'bg-red-900 text-red-300' : 'bg-yellow-900/60 text-yellow-400'].join(' ')}>
+              <Badge variant={anomaly.is_critical ? 'critical' : 'warning'}>
                 {anomaly.is_critical ? `critical ${anomaly.total_score}pts` : `warn ${anomaly.total_score}pts`}
-              </span>
+              </Badge>
             )}
-            <code className="text-xs font-mono text-gray-400">{run.runId.slice(0, 16)}…</code>
+            <code className="font-mono text-[11px] text-gray-400">{run.runId.slice(0, 16)}…</code>
           </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+          <div className="flex flex-wrap gap-x-4 font-mono text-[11px] text-gray-600">
             <span>{run.steps.length} step{run.steps.length !== 1 ? 's' : ''}</span>
             <span>${run.totalCost.toFixed(6)}</span>
             <span>{run.totalLatency}ms</span>
@@ -771,13 +686,13 @@ function RunCard({ run, anomaly, onClick }: { run: Run; anomaly?: AnomalyRun; on
           </div>
           <div className="flex gap-1 flex-wrap">
             {run.steps.map((s) => (
-              <span key={s.id} className="text-[10px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded font-mono">
+              <span key={s.id} className="font-mono text-[10px] bg-white/5 text-gray-500 px-1.5 py-0.5">
                 {s.step_name ?? `step_${(s.step_index ?? 0) + 1}`}
               </span>
             ))}
           </div>
         </div>
-        <div className="text-gray-600 text-xs ml-6 shrink-0">
+        <div className="font-mono text-[11px] text-gray-700 ml-6 shrink-0">
           {run.createdAt && new Date(run.createdAt).toLocaleTimeString()}
         </div>
       </div>
@@ -785,7 +700,7 @@ function RunCard({ run, anomaly, onClick }: { run: Run; anomaly?: AnomalyRun; on
   );
 }
 
-// ── Run timeline (Gantt / waterfall) ─────────────────────────────────────────
+// ── Run timeline ──────────────────────────────────────────────────────────────
 
 function RunTimeline({ steps, anomalyRun, registry, onSelect }: {
   steps: Call[];
@@ -811,8 +726,7 @@ function RunTimeline({ steps, anomalyRun, registry, onSelect }: {
 
   return (
     <div className="w-full space-y-2">
-      {/* Time axis */}
-      <div className="flex text-[10px] text-gray-700 pl-44 mb-1 justify-between pr-1">
+      <div className="flex font-mono text-[10px] text-gray-700 pl-44 mb-1 justify-between pr-1">
         <span>0</span>
         <span>{fmtMs(totalMs / 2)}</span>
         <span>{fmtMs(totalMs)}</span>
@@ -822,55 +736,39 @@ function RunTimeline({ steps, anomalyRun, registry, onSelect }: {
         const anomalyStep = anomalyRun?.steps.find(s => s.step_name === step.step_name);
         const isError   = step.status_success === false;
         const stepScore = anomalyStep?.codes.reduce((s, c) => s + c.score, 0) ?? 0;
+        const leftPct   = ((startMs - runStart) / totalMs) * 100;
+        const widthPct  = Math.max(((endMs - startMs) / totalMs) * 100, 1.5);
 
-        const leftPct  = ((startMs - runStart) / totalMs) * 100;
-        const widthPct = Math.max(((endMs - startMs) / totalMs) * 100, 1.5);
-
-        const barColor = isError
-          ? 'bg-red-500'
+        const barColor = isError ? 'bg-red-500'
           : stepScore >= 50 ? 'bg-red-400/70'
           : anomalyStep    ? 'bg-yellow-400/70'
-          : 'bg-indigo-500';
-
-        const trackCls = isError
-          ? 'border-red-800/60 group-hover:border-red-700'
-          : anomalyStep
-          ? 'border-yellow-800/40 group-hover:border-yellow-700/60'
-          : 'border-gray-800 group-hover:border-gray-600';
+          : 'bg-violet-500';
 
         return (
-          <div
-            key={step.id ?? i}
-            onClick={() => onSelect(step)}
-            className="flex items-center gap-3 group cursor-pointer"
-          >
-            {/* Step label */}
+          <div key={step.id ?? i} onClick={() => onSelect(step)} className="flex items-center gap-3 group cursor-pointer">
             <div className="w-44 shrink-0 text-right pr-1 space-y-0.5">
               <div className="flex items-center justify-end gap-1.5 min-w-0">
-                <span className={[
-                  'text-[9px] font-bold px-1 py-px rounded uppercase tracking-wider shrink-0',
-                  isError ? 'bg-red-800 text-red-300'
-                    : anomalyStep ? 'bg-yellow-900/60 text-yellow-400'
-                    : 'bg-green-900/60 text-green-400',
-                ].join(' ')}>
+                <Badge variant={isError ? 'error' : anomalyStep ? 'warning' : 'ok'}>
                   {isError ? 'err' : anomalyStep ? `${stepScore}pt` : 'ok'}
-                </span>
-                <span className="text-xs font-mono text-gray-200 truncate">{step.step_name ?? `step_${i + 1}`}</span>
+                </Badge>
+                <span className="font-mono text-[11px] text-gray-300 truncate">{step.step_name ?? `step_${i + 1}`}</span>
               </div>
-              <div className="text-[10px] text-gray-600 font-mono">
+              <div className="font-mono text-[10px] text-gray-700">
                 {step.latency_ms != null ? fmtMs(step.latency_ms) : '—'}
               </div>
             </div>
 
-            {/* Bar track */}
-            <div className={`flex-1 h-8 bg-gray-900 border rounded-lg relative overflow-hidden transition-colors ${trackCls}`}>
+            <div className={[
+              'flex-1 h-8 border border-white/8 relative overflow-hidden transition-colors',
+              'group-hover:border-white/15',
+            ].join(' ')}>
               <div
-                className={`absolute top-1.5 bottom-1.5 rounded ${barColor}`}
+                className={`absolute top-1.5 bottom-1.5 ${barColor}`}
                 style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
               />
               {widthPct > 12 && step.latency_ms != null && (
                 <span
-                  className="absolute top-1/2 -translate-y-1/2 text-[10px] text-white/70 font-mono px-2 pointer-events-none"
+                  className="absolute top-1/2 -translate-y-1/2 font-mono text-[10px] text-white/60 px-2 pointer-events-none"
                   style={{ left: `${leftPct}%` }}
                 >
                   {fmtMs(step.latency_ms)}
@@ -881,7 +779,6 @@ function RunTimeline({ steps, anomalyRun, registry, onSelect }: {
         );
       })}
 
-      {/* Anomaly codes summary */}
       {anomalyRun && anomalyRun.steps.some(s => s.codes.length > 0) && (
         <div className="pl-44 mt-3 flex flex-wrap gap-1.5">
           {anomalyRun.steps.flatMap(s =>
@@ -892,10 +789,10 @@ function RunTimeline({ steps, anomalyRun, registry, onSelect }: {
                   key={`${s.step_name}-${code}`}
                   title={info?.description}
                   className={[
-                    'inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border',
+                    'inline-flex items-center gap-1 font-mono text-[10px] px-1.5 py-0.5 border',
                     score >= 50
-                      ? 'bg-red-950/40 border-red-800/60 text-red-300'
-                      : 'bg-yellow-950/20 border-yellow-800/40 text-yellow-400',
+                      ? 'border-red-800/60 text-red-400'
+                      : 'border-yellow-800/40 text-yellow-500',
                   ].join(' ')}
                 >
                   <span className="text-gray-600">{code}</span>
@@ -918,6 +815,8 @@ interface ParsedPrompt {
   messages?: Array<{ role: string; content: string }>;
 }
 
+type AnomalyStep = AnomalyRun['steps'][number];
+
 function CallDetailDrawer({ call, onClose, anomalyStep, registry }: {
   call: Call;
   onClose: () => void;
@@ -925,72 +824,64 @@ function CallDetailDrawer({ call, onClose, anomalyStep, registry }: {
   registry?: ConditionRegistry;
 }) {
   const isError = call.status_success === false;
-
   let parsed: ParsedPrompt = {};
   try { if (call.prompt) parsed = JSON.parse(call.prompt); } catch {}
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
-      <div className="fixed right-0 top-0 h-full w-full sm:w-[520px] bg-gray-950 border-l border-gray-800 z-50 flex flex-col">
+      <div className="fixed inset-0 bg-black/60 z-40" onClick={onClose} />
+      <div className="fixed right-0 top-0 h-full w-full sm:w-[520px] bg-[#080808] border-l border-white/10 z-50 flex flex-col">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/8 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
-            <span className={[
-              'text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0',
-              isError ? 'bg-red-800 text-red-200' : 'bg-green-900 text-green-300',
-            ].join(' ')}>
-              {isError ? 'error' : 'ok'}
-            </span>
-            <span className="font-semibold text-gray-100 truncate">{call.step_name ?? '—'}</span>
-            {call.step_index != null && <span className="text-gray-600 text-xs shrink-0">#{call.step_index + 1}</span>}
+            <Badge variant={isError ? 'error' : 'ok'}>{isError ? 'error' : 'ok'}</Badge>
+            <span className="font-sans font-bold text-sm text-white truncate">{call.step_name ?? '—'}</span>
+            {call.step_index != null && <span className="font-mono text-[10px] text-gray-700 shrink-0">#{call.step_index + 1}</span>}
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-300 text-xl leading-none ml-4 shrink-0">×</button>
+          <button onClick={onClose} className="font-mono text-gray-600 hover:text-white text-xl leading-none ml-4 shrink-0">×</button>
         </div>
 
-        {/* Metadata strip */}
-        <div className="px-5 py-3 border-b border-gray-800 shrink-0">
-          <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs font-mono">
-            <span className="text-gray-500">model <span className="text-gray-300">{call.model ?? '—'}</span></span>
-            <span className="text-gray-500">latency <span className="text-gray-300">{call.latency_ms != null ? `${call.latency_ms}ms` : '—'}</span></span>
-            <span className="text-gray-500">cost <span className="text-gray-300">${Number(call.cost ?? 0).toFixed(6)}</span></span>
-            <span className="text-gray-500">tokens <span className="text-gray-300">{call.input_tokens ?? 0} in / {call.output_tokens ?? 0} out</span></span>
+        {/* Meta strip */}
+        <div className="px-5 py-3 border-b border-white/8 shrink-0">
+          <div className="flex flex-wrap gap-x-5 gap-y-1 font-mono text-[11px]">
+            <span className="text-gray-700">model <span className="text-gray-400">{call.model ?? '—'}</span></span>
+            <span className="text-gray-700">latency <span className="text-gray-400">{call.latency_ms != null ? `${call.latency_ms}ms` : '—'}</span></span>
+            <span className="text-gray-700">cost <span className="text-gray-400">${Number(call.cost ?? 0).toFixed(6)}</span></span>
+            <span className="text-gray-700">tokens <span className="text-gray-400">{call.input_tokens ?? 0} in / {call.output_tokens ?? 0} out</span></span>
           </div>
-          <div className="mt-1.5 text-[10px] font-mono text-gray-700 truncate">
+          <div className="mt-1.5 font-mono text-[10px] text-gray-700 truncate">
             run {call.run_id ?? '—'}
             {call.created_at && <span className="ml-3">{new Date(call.created_at).toLocaleString()}</span>}
           </div>
         </div>
 
-        {/* Scrollable body */}
+        {/* Body */}
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
 
           {parsed.system && (
             <section>
-              <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-2">System</p>
-              <div className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-3 text-xs text-gray-300 whitespace-pre-wrap font-mono leading-relaxed">
-                {parsed.system}
+              <p className="font-mono text-[10px] text-gray-700 uppercase tracking-widest mb-2">System</p>
+              <div className="border-l-2 border-white/10 pl-4 py-1">
+                <pre className="font-mono text-[11px] text-gray-400 whitespace-pre-wrap leading-5">{parsed.system}</pre>
               </div>
             </section>
           )}
 
           {parsed.messages && parsed.messages.length > 0 && (
             <section>
-              <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-2">Messages</p>
+              <p className="font-mono text-[10px] text-gray-700 uppercase tracking-widest mb-2">Messages</p>
               <div className="space-y-2">
                 {parsed.messages.map((msg, i) => (
                   <div
                     key={i}
                     className={[
-                      'rounded-lg px-3 py-2.5 text-xs font-mono leading-relaxed',
-                      msg.role === 'user'
-                        ? 'bg-gray-900 border border-gray-800 text-gray-300'
-                        : 'bg-indigo-950/40 border border-indigo-900/40 text-indigo-200',
+                      'border-l-2 pl-4 py-2',
+                      msg.role === 'user' ? 'border-white/10' : 'border-violet-600',
                     ].join(' ')}
                   >
-                    <p className="text-[10px] uppercase tracking-wider mb-1.5 opacity-50">{msg.role}</p>
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                    <p className="font-mono text-[10px] uppercase tracking-wider mb-1 text-gray-700">{msg.role}</p>
+                    <p className="font-mono text-[11px] text-gray-300 whitespace-pre-wrap leading-5">{msg.content}</p>
                   </div>
                 ))}
               </div>
@@ -999,18 +890,18 @@ function CallDetailDrawer({ call, onClose, anomalyStep, registry }: {
 
           {call.output_code && (
             <section>
-              <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-2">Output</p>
-              <div className="bg-gray-900 border border-emerald-900/40 rounded-lg px-3 py-3 text-xs text-emerald-200 whitespace-pre-wrap font-mono leading-relaxed">
-                {call.output_code}
+              <p className="font-mono text-[10px] text-gray-700 uppercase tracking-widest mb-2">Output</p>
+              <div className="border-l-2 border-green-700 pl-4 py-1">
+                <pre className="font-mono text-[11px] text-green-300 whitespace-pre-wrap leading-5">{call.output_code}</pre>
               </div>
             </section>
           )}
 
           {isError && call.error && (
             <section>
-              <p className="text-[10px] text-red-500 uppercase tracking-widest mb-2">Error</p>
-              <div className="bg-red-950/40 border border-red-800 rounded-lg px-3 py-3 text-xs text-red-300 font-mono leading-relaxed whitespace-pre-wrap">
-                {call.error}
+              <p className="font-mono text-[10px] text-red-600 uppercase tracking-widest mb-2">Error</p>
+              <div className="border-l-2 border-red-600 pl-4 py-1">
+                <pre className="font-mono text-[11px] text-red-400 leading-5 whitespace-pre-wrap">{call.error}</pre>
               </div>
             </section>
           )}
@@ -1018,48 +909,44 @@ function CallDetailDrawer({ call, onClose, anomalyStep, registry }: {
           {anomalyStep && anomalyStep.codes.length > 0 && (
             <section>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[10px] text-yellow-600 uppercase tracking-widest">Anomaly conditions</p>
-                <span className="text-[10px] font-mono text-gray-600">
+                <p className="font-mono text-[10px] text-yellow-600 uppercase tracking-widest">Anomaly conditions</p>
+                <span className="font-mono text-[10px] text-gray-700">
                   {anomalyStep.codes.reduce((s, c) => s + c.score, 0)} pts total
                 </span>
               </div>
               <div className="space-y-2">
                 {anomalyStep.codes.map(({ code, score }) => {
                   const info = registry?.[String(code)];
-                  const layer = info?.layer ?? '';
                   const isCritical = score >= 50;
                   return (
-                    <div key={code} className={[
-                      'rounded-lg border px-3 py-2.5',
-                      isCritical ? 'bg-red-950/30 border-red-800/60' : 'bg-yellow-950/20 border-yellow-800/40',
-                    ].join(' ')}>
+                    <div
+                      key={code}
+                      className={`border-l-2 pl-4 py-2 ${isCritical ? 'border-red-600' : 'border-yellow-600'}`}
+                    >
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[10px] font-mono text-gray-600 shrink-0">{code}</span>
-                        <span className={`text-xs font-semibold ${isCritical ? 'text-red-300' : 'text-yellow-300'}`}>
+                        <span className="font-mono text-[10px] text-gray-600">{code}</span>
+                        <span className={`font-mono text-[11px] font-bold ${isCritical ? 'text-red-300' : 'text-yellow-300'}`}>
                           {info?.name ?? `code_${code}`}
                         </span>
-                        <span className={`text-[10px] font-mono ml-auto shrink-0 ${isCritical ? 'text-red-400' : 'text-yellow-500'}`}>
+                        <span className={`font-mono text-[10px] ml-auto shrink-0 ${isCritical ? 'text-red-400' : 'text-yellow-500'}`}>
                           +{score}pts
                         </span>
                       </div>
-                      <p className="text-[11px] text-gray-400 leading-relaxed">{info?.description ?? '—'}</p>
-                      {layer && <p className="text-[10px] text-gray-600 mt-1 font-mono">{layer}</p>}
+                      <p className="font-mono text-[10px] text-gray-600 leading-5">{info?.description ?? '—'}</p>
+                      {info?.layer && <p className="font-mono text-[10px] text-gray-700 mt-0.5">{info.layer}</p>}
                     </div>
                   );
                 })}
               </div>
             </section>
           )}
-
         </div>
       </div>
     </>
   );
 }
 
-type AnomalyStep = AnomalyRun['steps'][number];
-
-// ── Per-step breakdown table ──────────────────────────────────────────────────
+// ── Step breakdown ────────────────────────────────────────────────────────────
 
 function StepBreakdown({ calls }: { calls: Call[] }) {
   if (!calls.length) return null;
@@ -1083,48 +970,44 @@ function StepBreakdown({ calls }: { calls: Call[] }) {
     return { name, total, avg, p95, errors, errorRate: total > 0 ? (errors / total) * 100 : 0, avgCost };
   }).sort((a, b) => b.total - a.total);
 
-  if (rows.length === 0) return null;
-
+  if (!rows.length) return null;
   const maxAvg = Math.max(...rows.map(r => r.avg), 1);
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-      <div className="px-5 py-3 border-b border-gray-800">
-        <p className="text-xs text-gray-400 font-medium">Steps</p>
+    <div className="bg-[#0a0a0a] border border-white/8 overflow-hidden">
+      <div className="px-5 py-3 border-b border-white/8">
+        <p className="font-mono text-[10px] text-gray-700 uppercase tracking-widest">Steps</p>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-xs font-mono">
+        <table className="w-full font-mono text-[11px]">
           <thead>
-            <tr className="border-b border-gray-800/60">
-              <th className="text-left px-5 py-2.5 text-gray-600 font-normal">step</th>
-              <th className="text-right px-4 py-2.5 text-gray-600 font-normal">calls</th>
-              <th className="px-4 py-2.5 text-gray-600 font-normal w-40">avg latency</th>
-              <th className="text-right px-4 py-2.5 text-gray-600 font-normal">p95</th>
-              <th className="text-right px-4 py-2.5 text-gray-600 font-normal">errors</th>
-              <th className="text-right px-5 py-2.5 text-gray-600 font-normal">avg cost</th>
+            <tr className="border-b border-white/8">
+              <th className="text-left px-5 py-2.5 text-gray-700 font-normal">step</th>
+              <th className="text-right px-4 py-2.5 text-gray-700 font-normal">calls</th>
+              <th className="px-4 py-2.5 text-gray-700 font-normal w-40">avg latency</th>
+              <th className="text-right px-4 py-2.5 text-gray-700 font-normal">p95</th>
+              <th className="text-right px-4 py-2.5 text-gray-700 font-normal">errors</th>
+              <th className="text-right px-5 py-2.5 text-gray-700 font-normal">avg cost</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-800/40">
+          <tbody className="divide-y divide-white/5">
             {rows.map(row => (
-              <tr key={row.name} className="hover:bg-gray-800/30 transition-colors">
-                <td className="px-5 py-3 text-gray-200">{row.name}</td>
-                <td className="px-4 py-3 text-gray-400 text-right tabular-nums">{row.total}</td>
+              <tr key={row.name} className="hover:bg-white/2 transition-colors">
+                <td className="px-5 py-3 text-gray-300">{row.name}</td>
+                <td className="px-4 py-3 text-gray-600 text-right tabular-nums">{row.total}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-indigo-500/70 rounded-full"
-                        style={{ width: `${(row.avg / maxAvg) * 100}%` }}
-                      />
+                    <div className="flex-1 h-px bg-white/8">
+                      <div className="h-full bg-violet-500/60" style={{ width: `${(row.avg / maxAvg) * 100}%` }} />
                     </div>
-                    <span className="text-gray-300 tabular-nums w-16 text-right shrink-0">{row.avg}ms</span>
+                    <span className="text-gray-400 tabular-nums w-16 text-right shrink-0">{row.avg}ms</span>
                   </div>
                 </td>
-                <td className="px-4 py-3 text-gray-500 text-right tabular-nums">{row.p95}ms</td>
-                <td className={`px-4 py-3 text-right tabular-nums ${row.errors > 0 ? 'text-red-400' : 'text-gray-700'}`}>
+                <td className="px-4 py-3 text-gray-600 text-right tabular-nums">{row.p95}ms</td>
+                <td className={`px-4 py-3 text-right tabular-nums ${row.errors > 0 ? 'text-red-400' : 'text-gray-800'}`}>
                   {row.errors > 0 ? `${row.errorRate.toFixed(1)}%` : '—'}
                 </td>
-                <td className="px-5 py-3 text-gray-500 text-right tabular-nums">${row.avgCost.toFixed(5)}</td>
+                <td className="px-5 py-3 text-gray-600 text-right tabular-nums">${row.avgCost.toFixed(5)}</td>
               </tr>
             ))}
           </tbody>
@@ -1134,28 +1017,28 @@ function StepBreakdown({ calls }: { calls: Call[] }) {
   );
 }
 
-// ── AI Analysis panel ─────────────────────────────────────────────────────────
+// ── AI analysis panel ─────────────────────────────────────────────────────────
 
 function AnalysisPanel({ text, costUsd, onClose }: { text: string; costUsd: number; onClose: () => void }) {
   const lines = text.split('\n');
   return (
-    <div className="mb-6 rounded-xl border border-indigo-800/60 bg-indigo-950/30 px-5 py-4">
-      <div className="flex items-center justify-between mb-3">
+    <div className="mb-6 bg-[#0a0a0a] border border-white/8 border-l-2 border-l-violet-600 px-5 py-4">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <span className="text-indigo-400 text-sm">✦</span>
-          <span className="text-xs font-semibold text-indigo-300 uppercase tracking-wider">AI Analysis</span>
-          <span className="text-[10px] text-gray-600 font-mono">claude-sonnet-4-6 · ${costUsd.toFixed(5)}</span>
+          <span className="text-violet-500 text-sm">✦</span>
+          <span className="font-mono text-[10px] text-violet-500 uppercase tracking-widest">AI Analysis</span>
+          <span className="font-mono text-[10px] text-gray-700">claude-sonnet-4-6 · ${costUsd.toFixed(5)}</span>
         </div>
-        <button onClick={onClose} className="text-gray-600 hover:text-gray-400 text-sm leading-none">×</button>
+        <button onClick={onClose} className="font-mono text-gray-600 hover:text-gray-300 text-sm leading-none">×</button>
       </div>
-      <div className="text-sm text-gray-300 leading-relaxed space-y-1">
+      <div className="space-y-1">
         {lines.map((line, i) => {
           if (!line.trim()) return <div key={i} className="h-2" />;
           const isBold = line.startsWith('**') && line.endsWith('**');
           const clean = isBold ? line.slice(2, -2) : line.replace(/\*\*(.*?)\*\*/g, '$1');
           return isBold
-            ? <p key={i} className="text-indigo-200 font-semibold text-xs uppercase tracking-wider mt-3 first:mt-0">{clean}</p>
-            : <p key={i} className={line.startsWith('- ') ? 'pl-3 text-gray-400 text-xs' : 'text-gray-300 text-xs'}>{clean}</p>;
+            ? <p key={i} className="font-mono text-[10px] text-violet-400 uppercase tracking-widest mt-4 first:mt-0">{clean}</p>
+            : <p key={i} className={`font-mono text-[11px] leading-5 ${line.startsWith('- ') ? 'pl-3 text-gray-600' : 'text-gray-400'}`}>{clean}</p>;
         })}
       </div>
     </div>
@@ -1185,20 +1068,16 @@ function AnomaliesTab({ runs, registry }: { runs: AnomalyRun[]; registry: Condit
     }
   }
 
-  if (runs.length === 0) {
-    return <EmptyState text="No anomalies detected yet." />;
-  }
+  if (runs.length === 0) return <EmptyState text="No anomalies detected yet." />;
 
   const q = query.toLowerCase();
   const filtered = runs.filter(r =>
-    !q ||
-    r.run_id.toLowerCase().includes(q) ||
-    r.steps.some(s => s.step_name.toLowerCase().includes(q))
+    !q || r.run_id.toLowerCase().includes(q) || r.steps.some(s => s.step_name.toLowerCase().includes(q))
   );
 
   return (
-    <div className="space-y-3 max-w-3xl">
-      <SearchBar value={query} onChange={setQuery} placeholder="Filter by run ID or step name…" />
+    <div className="space-y-2 max-w-3xl">
+      <SearchInput value={query} onChange={setQuery} placeholder="Filter by run ID or step name…" />
       {filtered.length === 0 && <EmptyState text="No anomalies match that filter." />}
       {filtered.map((run) => {
         const isOpen = expanded === run.run_id;
@@ -1206,101 +1085,289 @@ function AnomaliesTab({ runs, registry }: { runs: AnomalyRun[]; registry: Condit
           <div
             key={run.run_id}
             className={[
-              'rounded-xl border transition-colors',
-              run.is_critical ? 'border-red-800 bg-red-950/30' : 'border-yellow-800/50 bg-yellow-950/20',
+              'border-l-2',
+              run.is_critical ? 'border-red-600' : 'border-yellow-600',
             ].join(' ')}
           >
-            {/* Header row */}
             <button
               onClick={() => setExpanded(isOpen ? null : run.run_id)}
-              className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left"
+              className="w-full flex items-center justify-between gap-4 px-4 py-4 text-left bg-[#0a0a0a] hover:bg-white/4 transition-colors border border-l-0 border-white/8"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <span className={[
-                  'text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider shrink-0',
-                  run.is_critical ? 'bg-red-900 text-red-300' : 'bg-yellow-900/60 text-yellow-400',
-                ].join(' ')}>
+                <Badge variant={run.is_critical ? 'critical' : 'warning'}>
                   {run.is_critical ? 'critical' : 'warning'}
-                </span>
-                <code className="text-sm text-gray-300 font-mono truncate">{run.run_id}</code>
+                </Badge>
+                <code className="font-mono text-xs text-gray-400 truncate">{run.run_id}</code>
               </div>
               <div className="flex items-center gap-4 shrink-0">
-                <span className={[
-                  'text-sm font-semibold tabular-nums',
-                  run.is_critical ? 'text-red-400' : 'text-yellow-500',
-                ].join(' ')}>
+                <span className={`font-sans font-black text-sm tabular-nums ${run.is_critical ? 'text-red-400' : 'text-yellow-500'}`}>
                   {run.total_score} pts
                 </span>
-                <span className="text-gray-600 text-xs">{new Date(run.latest_at).toLocaleString()}</span>
-                <span className="text-gray-600 text-xs">{isOpen ? '▲' : '▼'}</span>
+                <span className="font-mono text-[10px] text-gray-700">{new Date(run.latest_at).toLocaleString()}</span>
+                <span className="font-mono text-gray-700 text-xs">{isOpen ? '▲' : '▼'}</span>
               </div>
             </button>
 
-            {/* Expanded step breakdown */}
             {isOpen && (
-              <div className="border-t border-gray-800 px-5 py-4 space-y-4">
+              <div className="bg-[#080808] border border-l-0 border-t-0 border-white/8 px-5 py-4 space-y-5">
                 {run.steps.map((step) => (
                   <div key={step.step_name}>
-                    <div className="text-xs text-gray-500 font-mono mb-2">{step.step_name}</div>
+                    <p className="font-mono text-[10px] text-gray-600 uppercase tracking-widest mb-2">{step.step_name}</p>
                     <div className="space-y-2">
                       {step.codes.map(({ code, score }) => {
                         const info = registry[String(code)];
+                        const isCrit = score >= 50;
                         return (
-                          <div
-                            key={code}
-                            className="flex items-start gap-3 rounded-lg bg-gray-900/60 border border-gray-800 px-3 py-2"
-                          >
-                            <span className="text-gray-600 font-mono text-[10px] shrink-0 pt-0.5">{code}</span>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-gray-200 text-xs font-semibold">
-                                  {info?.name ?? `code_${code}`}
-                                </span>
-                                <span className={[
-                                  'text-[10px] font-mono font-semibold shrink-0',
-                                  score >= 50 ? 'text-red-400' : 'text-yellow-500',
-                                ].join(' ')}>
-                                  +{score}pts
-                                </span>
-                                {info?.layer && (
-                                  <span className="text-[10px] text-gray-600 font-mono">{info.layer}</span>
-                                )}
-                              </div>
-                              {info?.description && (
-                                <p className="text-gray-500 text-[11px] mt-0.5 leading-relaxed">{info.description}</p>
-                              )}
+                          <div key={code} className={`border-l-2 pl-4 py-1.5 ${isCrit ? 'border-red-600' : 'border-yellow-600'}`}>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-mono text-[10px] text-gray-700">{code}</span>
+                              <span className={`font-mono text-[11px] font-bold ${isCrit ? 'text-red-300' : 'text-yellow-300'}`}>
+                                {info?.name ?? `code_${code}`}
+                              </span>
+                              <span className={`font-mono text-[10px] ml-auto shrink-0 ${isCrit ? 'text-red-400' : 'text-yellow-500'}`}>
+                                +{score}pts
+                              </span>
+                              {info?.layer && <span className="font-mono text-[10px] text-gray-700">{info.layer}</span>}
                             </div>
+                            {info?.description && (
+                              <p className="font-mono text-[10px] text-gray-700 mt-0.5 leading-5">{info.description}</p>
+                            )}
                           </div>
                         );
                       })}
                     </div>
-                    <div className="text-right text-xs text-gray-600 mt-1">
+                    <div className="text-right font-mono text-[10px] text-gray-700 mt-1">
                       step total: {step.codes.reduce((s, c) => s + c.score, 0)} pts
                     </div>
                   </div>
                 ))}
-                <div className="flex items-center justify-between pt-2 border-t border-gray-800 mt-2">
-                  <span className="text-xs text-gray-500">
-                    threshold: {ANOMALY_THRESHOLD} pts — run total: <span className={run.is_critical ? 'text-red-400 font-semibold' : 'text-yellow-500'}>{run.total_score} pts</span>
+
+                <div className="flex items-center justify-between pt-3 border-t border-white/8">
+                  <span className="font-mono text-[10px] text-gray-700">
+                    threshold: {ANOMALY_THRESHOLD} pts — total: <span className={run.is_critical ? 'text-red-400 font-bold' : 'text-yellow-500'}>{run.total_score} pts</span>
                   </span>
                   <button
                     onClick={() => analyzeRun(run.run_id)}
                     disabled={analyzing}
-                    className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-lg border border-indigo-700 bg-indigo-950/60 text-indigo-300 hover:bg-indigo-900/60 hover:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 font-mono text-[11px] border border-violet-700/60 text-violet-400 hover:bg-violet-900/20 hover:border-violet-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
-                    {analyzing && analysis?.runId !== run.run_id ? <><span className="animate-spin text-[10px]">◌</span> Analyzing…</> : <>✦ Analyze</>}
+                    {analyzing && analysis?.runId !== run.run_id ? <><span className="animate-spin text-[10px]">◌</span> analyzing…</> : <>✦ analyze</>}
                   </button>
                 </div>
                 {analysis && analysis.runId === run.run_id && (
-                  <div className="mt-3">
-                    <AnalysisPanel text={analysis.text} costUsd={analysis.costUsd} onClose={() => setAnalysis(null)} />
-                  </div>
+                  <AnalysisPanel text={analysis.text} costUsd={analysis.costUsd} onClose={() => setAnalysis(null)} />
                 )}
               </div>
             )}
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ── Steps health tab ──────────────────────────────────────────────────────────
+
+function StepsHealthTab({ health }: { health: StepHealthRow[] }) {
+  if (health.length === 0) {
+    return <EmptyState text="No step profiles yet — run a trace to create step profiles." />;
+  }
+
+  const order = { critical: 0, degrading: 1, warming: 2, healthy: 3 };
+  const sorted = [...health].sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
+  const activeCount  = health.filter(s => s.status !== 'warming').length;
+  const warmingCount = health.filter(s => s.status === 'warming').length;
+
+  function fmtMetric(metric: string, value: number) {
+    if (metric === 'latency_ms') return `${Math.round(value)}ms`;
+    if (metric === 'cost') return `$${value.toFixed(5)}`;
+    return Math.round(value).toLocaleString();
+  }
+
+  function metricLabel(metric: string) {
+    if (metric === 'latency_ms') return 'latency';
+    if (metric === 'total_tokens') return 'tokens';
+    return metric;
+  }
+
+  return (
+    <div className="space-y-2 max-w-3xl">
+
+      {/* L5 status banner */}
+      <div className="bg-[#0a0a0a] border border-white/8 px-5 py-3 flex items-center justify-between gap-4 mb-4">
+        <div className="font-mono text-[11px]">
+          <span className="text-white font-bold">L5 statistical detection</span>
+          <span className="text-gray-700 mx-2">·</span>
+          {activeCount > 0
+            ? <span className="text-green-500">{activeCount} step{activeCount !== 1 ? 's' : ''} active</span>
+            : <span className="text-gray-700">no steps active yet</span>
+          }
+          {warmingCount > 0 && <span className="text-gray-700 ml-2">· {warmingCount} warming</span>}
+        </div>
+        <span className="font-mono text-[10px] text-gray-700 shrink-0">{L5_MIN_SAMPLES} calls/step to activate</span>
+      </div>
+
+      {sorted.map(row => {
+        const isWarming  = row.status === 'warming';
+        const isCritical = row.status === 'critical';
+        const pct = Math.min((row.sample_count / L5_MIN_SAMPLES) * 100, 100);
+
+        const accentBorder = isCritical ? 'border-red-600'
+          : row.status === 'degrading' ? 'border-yellow-600'
+          : isWarming ? 'border-white/10'
+          : 'border-green-600';
+
+        return (
+          <div key={row.step_profile_id} className={`bg-[#0a0a0a] border border-white/8 border-l-2 ${accentBorder} px-5 py-4`}>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className={[
+                  'w-1.5 h-1.5 rounded-full shrink-0',
+                  isCritical  ? 'bg-red-500'
+                    : row.status === 'degrading' ? 'bg-yellow-500'
+                    : isWarming ? 'bg-gray-700'
+                    : 'bg-green-500',
+                ].join(' ')} />
+                <span className={`font-mono text-sm ${isWarming ? 'text-gray-600' : 'text-gray-300'}`}>
+                  {row.step_name}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <span className="font-mono text-[10px] text-gray-700">{row.sample_count} calls</span>
+                <Badge variant={isCritical ? 'critical' : row.status === 'degrading' ? 'warning' : row.status === 'warming' ? 'neutral' : 'ok'}>
+                  {row.status}
+                </Badge>
+              </div>
+            </div>
+
+            {isWarming && (
+              <div className="mt-3">
+                <div className="flex justify-between font-mono text-[10px] text-gray-700 mb-1.5">
+                  <span>{row.sample_count} / {L5_MIN_SAMPLES} calls to activate L5</span>
+                  <span>{Math.round(pct)}%</span>
+                </div>
+                <div className="h-px bg-white/8">
+                  <div className="h-full bg-violet-500/50 transition-all" style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            )}
+
+            {row.trends.length > 0 && (
+              <div className="mt-3 space-y-2 border-t border-white/8 pt-3">
+                {row.trends.map(t => (
+                  <div key={t.metric} className="flex items-center gap-3 font-mono text-[11px]">
+                    <span className="text-gray-700 w-16 shrink-0">{metricLabel(t.metric)}</span>
+                    <span className="text-gray-700">baseline <span className="text-gray-400">{fmtMetric(t.metric, t.baseline_mean)}</span></span>
+                    <span className={t.direction === 'up' ? 'text-red-400' : 'text-blue-400'}>{t.direction === 'up' ? '↑' : '↓'}</span>
+                    <span className="text-gray-700">recent <span className={isCritical ? 'text-red-300' : 'text-yellow-300'}>{fmtMetric(t.metric, t.recent_mean)}</span></span>
+                    <span className={['ml-auto shrink-0 font-bold', Math.abs(t.sigma) >= 3 ? 'text-red-400' : 'text-yellow-500'].join(' ')}>
+                      {t.sigma > 0 ? '+' : ''}{t.sigma}σ
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Usage tab ─────────────────────────────────────────────────────────────────
+
+function UsageTab({ project }: { project: Project }) {
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
+  const [data, setData] = useState<{
+    month_cost_usd: number;
+    total_cost_usd: number;
+    budget_usd: number | null;
+    budget_pct: number | null;
+    by_feature: Record<string, number>;
+    recent: Array<{ id: number; feature: string; model: string; input_tokens: number; output_tokens: number; cost_usd: number; created_at: string; run_id: string }>;
+  } | null>(null);
+
+  useEffect(() => {
+    fetch(`${BACKEND_URL}/projects/${project.id}/usage`)
+      .then(r => r.json())
+      .then(setData)
+      .catch(() => {});
+  }, [project.id, BACKEND_URL]);
+
+  if (!data) return <div className="font-mono text-xs text-gray-700 py-8">loading…</div>;
+
+  const budgetPct = data.budget_pct ?? 0;
+  const overBudget = data.budget_usd != null && data.month_cost_usd >= data.budget_usd;
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-white/8">
+        <StatCard label="This month" value={`$${data.month_cost_usd.toFixed(4)}`} mono />
+        <StatCard label="All time"   value={`$${data.total_cost_usd.toFixed(4)}`} mono />
+        <div className="border border-white/8 px-4 py-4">
+          {data.budget_usd != null ? (
+            <>
+              <p className="font-mono text-[10px] text-gray-700 uppercase tracking-widest mb-2">Budget</p>
+              <p className={`font-sans font-black text-xl tabular-nums ${overBudget ? 'text-red-400' : 'text-white'}`}>
+                {budgetPct.toFixed(1)}%
+              </p>
+              <p className="font-mono text-[10px] text-gray-700 mt-1">of ${data.budget_usd.toFixed(2)}/mo</p>
+              <div className="mt-3 h-px bg-white/8">
+                <div
+                  className={`h-full transition-all ${overBudget ? 'bg-red-500' : budgetPct > 80 ? 'bg-yellow-500' : 'bg-emerald-500'}`}
+                  style={{ width: `${Math.min(budgetPct, 100)}%` }}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="font-mono text-[10px] text-gray-700 uppercase tracking-widest mb-2">Budget</p>
+              <p className="font-sans font-black text-xl text-gray-800">—</p>
+              <p className="font-mono text-[10px] text-gray-700 mt-1">not set</p>
+            </>
+          )}
+        </div>
+      </div>
+
+      {Object.keys(data.by_feature).length > 0 && (
+        <div className="bg-[#0a0a0a] border border-white/8 divide-y divide-white/8">
+          <div className="px-4 py-3">
+            <p className="font-mono text-[10px] text-gray-700 uppercase tracking-widest">This month by feature</p>
+          </div>
+          {Object.entries(data.by_feature).map(([feature, cost]) => (
+            <div key={feature} className="flex items-center justify-between px-4 py-3">
+              <span className="font-mono text-[11px] text-gray-500">{feature}</span>
+              <span className="font-mono text-[11px] text-gray-300">${cost.toFixed(4)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {data.recent.length > 0 ? (
+        <div className="border border-white/8">
+          <div className="px-4 py-3 border-b border-white/8">
+            <p className="font-mono text-[10px] text-gray-700 uppercase tracking-widest">Recent usage</p>
+          </div>
+          <div className="divide-y divide-white/8">
+            {data.recent.map(r => (
+              <div key={r.id} className="px-4 py-3 flex items-center justify-between">
+                <div className="min-w-0">
+                  <span className="font-mono text-[11px] text-gray-400">{r.feature}</span>
+                  <span className="font-mono text-[10px] text-gray-700 mx-2">·</span>
+                  <span className="font-mono text-[10px] text-gray-700">{r.model}</span>
+                  <div className="font-mono text-[10px] text-gray-700 mt-0.5">{r.input_tokens + r.output_tokens} tokens · run {r.run_id.slice(0, 8)}…</div>
+                </div>
+                <div className="text-right shrink-0 ml-4">
+                  <div className="font-mono text-[11px] text-gray-300">${r.cost_usd.toFixed(6)}</div>
+                  <div className="font-mono text-[10px] text-gray-700">{new Date(r.created_at).toLocaleDateString()}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <EmptyState text="No usage recorded yet — click ✦ Analyze Run on any run to generate a report." />
+      )}
     </div>
   );
 }
@@ -1319,289 +1386,55 @@ interface ThresholdData {
   };
 }
 
-// ── Steps health tab ─────────────────────────────────────────────────────────
-
-function StepsHealthTab({ health }: { health: StepHealthRow[] }) {
-  if (health.length === 0) {
-    return (
-      <div className="text-center py-24 text-gray-600 text-sm space-y-2">
-        <p>No step profiles yet — run a trace to create step profiles.</p>
-      </div>
-    );
-  }
-
-  const order = { critical: 0, degrading: 1, warming: 2, healthy: 3 };
-  const sorted = [...health].sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
-
-  const activeCount  = health.filter(s => s.status !== 'warming').length;
-  const warmingCount = health.filter(s => s.status === 'warming').length;
-
-  function fmtMetric(metric: string, value: number) {
-    if (metric === 'latency_ms') return `${Math.round(value)}ms`;
-    if (metric === 'cost') return `$${value.toFixed(5)}`;
-    return Math.round(value).toLocaleString();
-  }
-
-  function metricLabel(metric: string) {
-    if (metric === 'latency_ms') return 'latency';
-    if (metric === 'total_tokens') return 'tokens';
-    return metric;
-  }
-
+function SettingSection({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-3 max-w-3xl">
-
-      {/* L5 status banner */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl px-5 py-3 flex items-center justify-between gap-4">
-        <div className="text-xs text-gray-400">
-          <span className="text-gray-200 font-medium">L5 statistical detection</span>
-          <span className="text-gray-600 mx-2">·</span>
-          {activeCount > 0
-            ? <span className="text-green-400">{activeCount} step{activeCount !== 1 ? 's' : ''} active</span>
-            : <span className="text-gray-500">no steps active yet</span>
-          }
-          {warmingCount > 0 && (
-            <span className="text-gray-500 ml-2">· {warmingCount} warming up</span>
-          )}
-        </div>
-        <span className="text-[10px] text-gray-600 font-mono shrink-0">{L5_MIN_SAMPLES} calls/step to activate</span>
-      </div>
-
-      {sorted.map(row => {
-        const isWarming  = row.status === 'warming';
-        const isHealthy  = row.status === 'healthy';
-        const isCritical = row.status === 'critical';
-        const pct = Math.min((row.sample_count / L5_MIN_SAMPLES) * 100, 100);
-
-        return (
-          <div
-            key={row.step_profile_id}
-            className={[
-              'rounded-xl border p-5',
-              isCritical  ? 'border-red-800/60 bg-red-950/20'
-                : row.status === 'degrading' ? 'border-yellow-800/40 bg-yellow-950/10'
-                : isWarming ? 'border-gray-800 bg-gray-900/60'
-                : 'border-gray-800 bg-gray-900',
-            ].join(' ')}
-          >
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3 min-w-0">
-                <span className={[
-                  'w-2 h-2 rounded-full shrink-0',
-                  isCritical  ? 'bg-red-400'
-                    : row.status === 'degrading' ? 'bg-yellow-400'
-                    : isWarming ? 'bg-gray-600'
-                    : 'bg-green-400',
-                ].join(' ')} />
-                <span className={`font-mono text-sm ${isWarming ? 'text-gray-500' : 'text-gray-200'}`}>
-                  {row.step_name}
-                </span>
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <span className="text-xs text-gray-600 font-mono">{row.sample_count} calls</span>
-                <span className={[
-                  'text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider',
-                  isCritical  ? 'bg-red-900 text-red-300'
-                    : row.status === 'degrading' ? 'bg-yellow-900/60 text-yellow-400'
-                    : isWarming ? 'bg-gray-800 text-gray-500'
-                    : 'bg-green-900/40 text-green-400',
-                ].join(' ')}>
-                  {row.status}
-                </span>
-              </div>
-            </div>
-
-            {/* Warming progress bar */}
-            {isWarming && (
-              <div className="mt-3">
-                <div className="flex justify-between text-[10px] text-gray-600 font-mono mb-1.5">
-                  <span>{row.sample_count} / {L5_MIN_SAMPLES} calls to activate L5</span>
-                  <span>{Math.round(pct)}%</span>
-                </div>
-                <div className="h-1 bg-gray-800 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-indigo-500/50 rounded-full transition-all"
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {row.trends.length > 0 && (
-              <div className="mt-3 space-y-2">
-                {row.trends.map(t => (
-                  <div key={t.metric} className="flex items-center gap-3 text-xs font-mono">
-                    <span className="text-gray-500 w-16 shrink-0">{metricLabel(t.metric)}</span>
-                    <span className="text-gray-500">
-                      baseline <span className="text-gray-300">{fmtMetric(t.metric, t.baseline_mean)}</span>
-                    </span>
-                    <span className={t.direction === 'up' ? 'text-red-400' : 'text-blue-400'}>
-                      {t.direction === 'up' ? '↑' : '↓'}
-                    </span>
-                    <span className="text-gray-500">
-                      recent <span className={isCritical ? 'text-red-300' : 'text-yellow-300'}>
-                        {fmtMetric(t.metric, t.recent_mean)}
-                      </span>
-                    </span>
-                    <span className={[
-                      'ml-auto shrink-0 font-semibold',
-                      Math.abs(t.sigma) >= 3 ? 'text-red-400' : 'text-yellow-500',
-                    ].join(' ')}>
-                      {t.sigma > 0 ? '+' : ''}{t.sigma}σ
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      })}
+    <div className="pt-8 border-t border-white/8 first:border-t-0 first:pt-0">
+      <h2 className="font-sans font-bold text-sm uppercase tracking-widest text-white mb-1">{title}</h2>
+      {description && <p className="font-mono text-[11px] text-gray-600 mb-5 leading-5">{description}</p>}
+      {children}
     </div>
   );
 }
 
-function UsageTab({ project }: { project: Project }) {
-  const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
-  const [data, setData] = useState<{
-    month_cost_usd: number;
-    total_cost_usd: number;
-    budget_usd: number | null;
-    budget_pct: number | null;
-    by_feature: Record<string, number>;
-    recent: Array<{ id: number; feature: string; model: string; input_tokens: number; output_tokens: number; cost_usd: number; created_at: string; run_id: string }>;
-  } | null>(null);
-
-  useEffect(() => {
-    fetch(`${BACKEND}/projects/${project.id}/usage`)
-      .then(r => r.json())
-      .then(setData)
-      .catch(() => {});
-  }, [project.id, BACKEND]);
-
-  if (!data) return <div className="text-sm text-gray-600 py-8">Loading…</div>;
-
-  const budgetPct = data.budget_pct ?? 0;
-  const overBudget = data.budget_usd != null && data.month_cost_usd >= data.budget_usd;
-
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-6">
-      {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl px-5 py-4">
-          <div className="text-2xl font-semibold text-gray-100">${data.month_cost_usd.toFixed(4)}</div>
-          <div className="text-xs text-gray-500 mt-1">This month</div>
-        </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-xl px-5 py-4">
-          <div className="text-2xl font-semibold text-gray-100">${data.total_cost_usd.toFixed(4)}</div>
-          <div className="text-xs text-gray-500 mt-1">All time</div>
-        </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-xl px-5 py-4">
-          {data.budget_usd != null ? (
-            <>
-              <div className={`text-2xl font-semibold ${overBudget ? 'text-red-400' : 'text-gray-100'}`}>
-                {budgetPct.toFixed(1)}%
-              </div>
-              <div className="text-xs text-gray-500 mt-1">of ${data.budget_usd.toFixed(2)} budget</div>
-              <div className="mt-2 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all ${overBudget ? 'bg-red-500' : budgetPct > 80 ? 'bg-yellow-500' : 'bg-emerald-500'}`}
-                  style={{ width: `${Math.min(budgetPct, 100)}%` }}
-                />
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="text-2xl font-semibold text-gray-600">—</div>
-              <div className="text-xs text-gray-600 mt-1">No budget set</div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* By feature */}
-      {Object.keys(data.by_feature).length > 0 && (
-        <div className="border border-gray-800 rounded-xl p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-gray-300">This month by feature</h3>
-          {Object.entries(data.by_feature).map(([feature, cost]) => (
-            <div key={feature} className="flex items-center justify-between text-sm">
-              <span className="text-gray-400 font-mono text-xs">{feature}</span>
-              <span className="text-gray-200">${cost.toFixed(4)}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Recent entries */}
-      {data.recent.length > 0 ? (
-        <div className="border border-gray-800 rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-800">
-            <h3 className="text-sm font-semibold text-gray-300">Recent usage</h3>
-          </div>
-          <div className="divide-y divide-gray-800">
-            {data.recent.map(r => (
-              <div key={r.id} className="px-4 py-3 flex items-center justify-between text-sm">
-                <div className="min-w-0">
-                  <span className="text-gray-400 font-mono text-xs">{r.feature}</span>
-                  <span className="text-gray-600 mx-2">·</span>
-                  <span className="text-gray-600 text-xs">{r.model}</span>
-                  <div className="text-gray-600 text-xs mt-0.5">{r.input_tokens + r.output_tokens} tokens · run {r.run_id.slice(0, 8)}…</div>
-                </div>
-                <div className="text-right shrink-0 ml-4">
-                  <div className="text-gray-200">${r.cost_usd.toFixed(6)}</div>
-                  <div className="text-gray-600 text-xs">{new Date(r.created_at).toLocaleDateString()}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div className="text-center py-16 text-gray-600 text-sm">
-          No usage recorded yet — click <strong className="text-gray-500">✦ Analyze Run</strong> on any run to generate a report.
-        </div>
-      )}
+    <div>
+      <label className="block font-mono text-[10px] text-gray-700 uppercase tracking-widest mb-1.5">{label}</label>
+      {children}
     </div>
   );
 }
+
+const inputCls = 'bg-black border border-white/8 px-3 py-2 font-mono text-xs text-gray-300 placeholder-gray-700 focus:outline-none focus:border-white/20 w-full';
 
 function SettingsTab({ project }: { project: Project }) {
-  const [url, setUrl] = useState(project.slack_webhook_url ?? '');
+  const [url, setUrl]             = useState(project.slack_webhook_url ?? '');
   const [alertOnError, setAlertOnError] = useState(project.alert_on_error ?? true);
-  const [rateThreshold, setRateThreshold] = useState(
-    Math.round((project.alert_error_rate_threshold ?? 0.25) * 100)
-  );
-  const [rateWindow, setRateWindow] = useState(project.alert_error_rate_window ?? 20);
-  const [sentryDsn, setSentryDsn] = useState(project.sentry_dsn ?? '');
-  const [sentryLevel, setSentryLevel] = useState<'critical' | 'warning' | 'none'>(
-    (project.sentry_alert_level as 'critical' | 'warning' | 'none') ?? 'critical'
-  );
-  const [slackAnomalyLevel, setSlackAnomalyLevel] = useState<'critical' | 'warning' | 'none'>(
-    (project.slack_anomaly_level as 'critical' | 'warning' | 'none') ?? 'critical'
-  );
-  const [budget, setBudget] = useState(project.monthly_budget_usd?.toString() ?? '');
-  const [thresholdMode, setThresholdMode] = useState<'dynamic' | 'manual'>(
-    (project.threshold_mode as 'dynamic' | 'manual') ?? 'dynamic'
-  );
+  const [rateThreshold, setRateThreshold] = useState(Math.round((project.alert_error_rate_threshold ?? 0.25) * 100));
+  const [rateWindow, setRateWindow]   = useState(project.alert_error_rate_window ?? 20);
+  const [sentryDsn, setSentryDsn]   = useState(project.sentry_dsn ?? '');
+  const [sentryLevel, setSentryLevel] = useState<'critical' | 'warning' | 'none'>((project.sentry_alert_level as 'critical' | 'warning' | 'none') ?? 'critical');
+  const [slackAnomalyLevel, setSlackAnomalyLevel] = useState<'critical' | 'warning' | 'none'>((project.slack_anomaly_level as 'critical' | 'warning' | 'none') ?? 'critical');
+  const [budget, setBudget]         = useState(project.monthly_budget_usd?.toString() ?? '');
+  const [thresholdMode, setThresholdMode] = useState<'dynamic' | 'manual'>((project.threshold_mode as 'dynamic' | 'manual') ?? 'dynamic');
   const [manualLatency, setManualLatency] = useState(project.threshold_latency_ms?.toString() ?? '');
   const [manualTokens, setManualTokens]   = useState(project.threshold_tokens?.toString() ?? '');
   const [manualCost, setManualCost]       = useState(project.threshold_cost?.toString() ?? '');
-  const [baseline, setBaseline] = useState<ThresholdData | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [baseline, setBaseline]     = useState<ThresholdData | null>(null);
+  const [saving, setSaving]         = useState(false);
+  const [testing, setTesting]       = useState(false);
+  const [msg, setMsg]               = useState<{ ok: boolean; text: string } | null>(null);
   const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
 
   useEffect(() => {
     fetch(`${BACKEND_URL}/projects/${project.id}/thresholds`)
-      .then(r => r.json())
-      .then(setBaseline)
-      .catch(() => {});
+      .then(r => r.json()).then(setBaseline).catch(() => {});
   }, [project.id, BACKEND_URL]);
 
   async function save() {
-    setSaving(true);
-    setMsg(null);
+    setSaving(true); setMsg(null);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000'}/projects/${project.id}/webhook`, {
+      const res = await fetch(`${BACKEND_URL}/projects/${project.id}/webhook`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1629,12 +1462,9 @@ function SettingsTab({ project }: { project: Project }) {
   }
 
   async function testWebhook() {
-    setTesting(true);
-    setMsg(null);
+    setTesting(true); setMsg(null);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000'}/projects/${project.id}/webhook/test`, {
-        method: 'POST',
-      });
+      const res = await fetch(`${BACKEND_URL}/projects/${project.id}/webhook/test`, { method: 'POST' });
       if (!res.ok) throw new Error(await res.text());
       setMsg({ ok: true, text: 'Test message sent — check Slack.' });
     } catch (e) {
@@ -1644,288 +1474,196 @@ function SettingsTab({ project }: { project: Project }) {
     }
   }
 
+  const alertLevelOptions = [
+    { value: 'critical' as const, label: 'critical only' },
+    { value: 'warning'  as const, label: 'warning + critical' },
+    { value: 'none'     as const, label: 'off' },
+  ];
+
   return (
-    <div className="max-w-xl space-y-8">
+    <div className="max-w-xl space-y-0">
 
-      {/* Slack webhook */}
-      <div>
-        <h2 className="text-base font-semibold text-gray-100 mb-1">Slack alerts</h2>
-        <p className="text-sm text-gray-500 mb-4">
-          Paste an <a href="https://api.slack.com/messaging/webhooks" target="_blank" rel="noreferrer" className="underline text-gray-400 hover:text-gray-200">Incoming Webhook</a> URL to receive alerts in Slack.
-        </p>
-        <label className="block text-xs text-gray-400 mb-1.5">Webhook URL</label>
-        <div className="flex gap-2">
-          <input
-            type="url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://hooks.slack.com/services/…"
-            className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-gray-500 font-mono"
-          />
-          <button
-            onClick={testWebhook}
-            disabled={testing || !url.trim()}
-            className="px-4 py-2 bg-gray-800 text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-700 disabled:opacity-40 transition-colors shrink-0"
-          >
-            {testing ? 'Sending…' : 'Test'}
-          </button>
-        </div>
-      </div>
-
-      {/* Alert rules */}
-      <div>
-        <h2 className="text-base font-semibold text-gray-100 mb-4">Alert rules</h2>
-        <div className="space-y-5">
-
-          <label className="flex items-center justify-between gap-4 cursor-pointer">
-            <div>
-              <p className="text-sm text-gray-200">Alert on every error call</p>
-              <p className="text-xs text-gray-500 mt-0.5">Fires immediately whenever a call returns an error</p>
+      <SettingSection
+        title="Slack alerts"
+        description="Paste an Incoming Webhook URL to receive alerts in Slack."
+      >
+        <div className="space-y-4">
+          <Field label="Webhook URL">
+            <div className="flex gap-2">
+              <input
+                type="url" value={url} onChange={e => setUrl(e.target.value)}
+                placeholder="https://hooks.slack.com/services/…"
+                className={inputCls}
+              />
+              <button
+                onClick={testWebhook} disabled={testing || !url.trim()}
+                className="px-4 py-2 font-mono text-xs border border-white/8 text-gray-400 hover:bg-white/4 disabled:opacity-40 transition-colors shrink-0"
+              >
+                {testing ? 'sending…' : 'test'}
+              </button>
             </div>
-            <button
-              role="switch"
-              aria-checked={alertOnError}
-              onClick={() => setAlertOnError((v) => !v)}
-              className={[
-                'relative w-10 h-5 rounded-full transition-colors shrink-0',
-                alertOnError ? 'bg-white' : 'bg-gray-700',
-              ].join(' ')}
-            >
-              <span className={[
-                'absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-gray-900 transition-transform',
-                alertOnError ? 'translate-x-5' : 'translate-x-0',
-              ].join(' ')} />
-            </button>
-          </label>
+          </Field>
 
-          <div className="flex items-center gap-6">
+          <div className="flex items-center justify-between">
             <div>
-              <label className="block text-sm text-gray-200 mb-1">Error rate threshold</label>
-              <p className="text-xs text-gray-500 mb-2">5 min cooldown between alerts</p>
+              <p className="font-mono text-xs text-gray-300">Alert on every error call</p>
+              <p className="font-mono text-[10px] text-gray-700 mt-0.5">Fires immediately whenever a call returns an error</p>
+            </div>
+            <Toggle checked={alertOnError} onChange={setAlertOnError} />
+          </div>
+
+          <div className="flex items-center gap-8">
+            <Field label="Error rate threshold">
               <div className="flex items-center gap-2">
                 <input
                   type="number" min={1} max={100} value={rateThreshold}
-                  onChange={(e) => setRateThreshold(Number(e.target.value))}
-                  className="w-20 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-gray-500 text-center"
+                  onChange={e => setRateThreshold(Number(e.target.value))}
+                  className="w-20 bg-black border border-white/8 px-3 py-2 font-mono text-xs text-gray-300 focus:outline-none focus:border-white/20 text-center"
                 />
-                <span className="text-sm text-gray-500">%</span>
+                <span className="font-mono text-xs text-gray-700">%</span>
               </div>
-            </div>
-            <div>
-              <label className="block text-sm text-gray-200 mb-1">Over last</label>
-              <p className="text-xs text-gray-500 mb-2">&nbsp;</p>
+            </Field>
+            <Field label="Over last">
               <div className="flex items-center gap-2">
                 <input
                   type="number" min={5} max={100} value={rateWindow}
-                  onChange={(e) => setRateWindow(Number(e.target.value))}
-                  className="w-20 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-gray-500 text-center"
+                  onChange={e => setRateWindow(Number(e.target.value))}
+                  className="w-20 bg-black border border-white/8 px-3 py-2 font-mono text-xs text-gray-300 focus:outline-none focus:border-white/20 text-center"
                 />
-                <span className="text-sm text-gray-500">calls</span>
+                <span className="font-mono text-xs text-gray-700">calls</span>
               </div>
-            </div>
+            </Field>
           </div>
 
-          <div>
-            <p className="text-sm text-gray-200 mb-1">Anomaly alerts</p>
-            <p className="text-xs text-gray-500 mb-2">Send a Slack message when anomalies are detected. 1 min cooldown between alerts.</p>
-            <div className="inline-flex rounded-lg border border-gray-700 overflow-hidden">
-              {(['critical', 'warning', 'none'] as const).map((opt, i) => (
-                <button
-                  key={opt}
-                  onClick={() => setSlackAnomalyLevel(opt)}
-                  className={[
-                    'px-4 py-2 text-xs font-medium transition-colors',
-                    i < 2 ? 'border-r border-gray-700' : '',
-                    slackAnomalyLevel === opt
-                      ? opt === 'critical' ? 'bg-red-900/60 text-red-300'
-                        : opt === 'warning' ? 'bg-yellow-900/40 text-yellow-400'
-                        : 'bg-gray-800 text-gray-300'
-                      : 'bg-transparent text-gray-500 hover:text-gray-300',
-                  ].join(' ')}
-                >
-                  {opt === 'critical' ? 'Critical only' : opt === 'warning' ? 'Warning + critical' : 'Off'}
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-gray-600 mt-2">
+          <Field label="Anomaly alerts">
+            <SegmentedControl options={alertLevelOptions} value={slackAnomalyLevel} onChange={setSlackAnomalyLevel} />
+            <p className="font-mono text-[10px] text-gray-700 mt-2">
               {slackAnomalyLevel === 'critical' && 'Alerts when anomaly score reaches ≥ 100pts.'}
-              {slackAnomalyLevel === 'warning' && 'Alerts on any anomaly hit, even below threshold.'}
-              {slackAnomalyLevel === 'none' && 'No anomaly alerts sent to Slack.'}
+              {slackAnomalyLevel === 'warning'  && 'Alerts on any anomaly hit, even below threshold.'}
+              {slackAnomalyLevel === 'none'      && 'No anomaly alerts sent to Slack.'}
             </p>
-          </div>
-
+          </Field>
         </div>
-      </div>
+      </SettingSection>
 
-      {/* Sentry integration */}
-      <div>
-        <h2 className="text-base font-semibold text-gray-100 mb-1">Sentry integration</h2>
-        <p className="text-sm text-gray-500 mb-4">
-          When trace.ai detects a critical anomaly, it sends a structured event to your Sentry project — grouped by step name, tagged with model and layer, ready to trigger your existing alerts.
-        </p>
-        <label className="block text-xs text-gray-400 mb-1.5">Sentry DSN</label>
-        <input
-          type="url"
-          value={sentryDsn}
-          onChange={(e) => setSentryDsn(e.target.value)}
-          placeholder="https://…@o….ingest.sentry.io/…"
-          className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-gray-500 font-mono"
-        />
-        <p className="text-xs text-gray-600 mt-2">
-          Find this in your Sentry project under Settings → Client Keys (DSN).
-        </p>
-
-        <div className="mt-5">
-          <label className="block text-xs text-gray-400 mb-2">Forward to Sentry when</label>
-          <div className="inline-flex rounded-lg border border-gray-700 overflow-hidden">
-            {(['critical', 'warning', 'none'] as const).map((opt) => (
-              <button
-                key={opt}
-                onClick={() => setSentryLevel(opt)}
-                className={[
-                  'px-4 py-2 text-xs font-medium transition-colors capitalize',
-                  sentryLevel === opt
-                    ? opt === 'critical' ? 'bg-red-900/60 text-red-300 border-r border-gray-700'
-                      : opt === 'warning' ? 'bg-yellow-900/40 text-yellow-400 border-r border-gray-700'
-                      : 'bg-gray-800 text-gray-300'
-                    : 'bg-transparent text-gray-500 hover:text-gray-300 border-r border-gray-700 last:border-r-0',
-                ].join(' ')}
-              >
-                {opt === 'critical' ? 'Critical only' : opt === 'warning' ? 'Warning + critical' : 'Off'}
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-gray-600 mt-2">
-            {sentryLevel === 'critical' && 'Sends to Sentry when run score crosses the threshold (≥ 100pts).'}
-            {sentryLevel === 'warning' && 'Sends to Sentry for any anomaly hit, even below threshold.'}
-            {sentryLevel === 'none' && 'Sentry DSN saved but no events will be forwarded.'}
-          </p>
+      <SettingSection
+        title="Sentry integration"
+        description="When trace.ai detects a critical anomaly, it sends a structured event to your Sentry project — grouped by step name, tagged with model and layer."
+      >
+        <div className="space-y-4">
+          <Field label="Sentry DSN">
+            <input
+              type="url" value={sentryDsn} onChange={e => setSentryDsn(e.target.value)}
+              placeholder="https://…@o….ingest.sentry.io/…"
+              className={inputCls}
+            />
+            <p className="font-mono text-[10px] text-gray-700 mt-1.5">Settings → Client Keys (DSN) in your Sentry project.</p>
+          </Field>
+          <Field label="Forward to Sentry when">
+            <SegmentedControl options={alertLevelOptions} value={sentryLevel} onChange={setSentryLevel} />
+            <p className="font-mono text-[10px] text-gray-700 mt-2">
+              {sentryLevel === 'critical' && 'Sends to Sentry when run score crosses the threshold (≥ 100pts).'}
+              {sentryLevel === 'warning'  && 'Sends to Sentry for any anomaly hit, even below threshold.'}
+              {sentryLevel === 'none'      && 'Sentry DSN saved but no events will be forwarded.'}
+            </p>
+          </Field>
         </div>
-      </div>
+      </SettingSection>
 
-      {/* L4 thresholds */}
-      <div className="border border-gray-800 rounded-xl p-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold text-gray-300">L4 anomaly thresholds</h3>
-            <p className="text-xs text-gray-600 mt-0.5">Latency, token, and cost limits for anomaly detection</p>
-          </div>
-          <div className="flex rounded-lg overflow-hidden border border-gray-700 text-xs">
-            {(['dynamic', 'manual'] as const).map(opt => (
-              <button
-                key={opt}
-                onClick={() => setThresholdMode(opt)}
-                className={`px-3 py-1.5 capitalize transition-colors ${
-                  thresholdMode === opt
-                    ? 'bg-gray-700 text-white'
-                    : 'text-gray-500 hover:text-gray-300'
-                }`}
-              >
-                {opt}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {thresholdMode === 'dynamic' ? (
-          baseline ? (
-            <div className="space-y-2">
-              <p className="text-xs text-gray-600">
-                {baseline.mode === 'dynamic'
-                  ? `Learned from ${baseline.calls_used} calls (p95). Updates automatically.`
-                  : `Static defaults active — ${baseline.calls_needed} more calls needed to adapt.`}
-              </p>
-              {[
-                { label: 'Latency', value: baseline.thresholds.latency_ms_max != null ? `${baseline.thresholds.latency_ms_max.toLocaleString()}ms` : '—', sub: baseline.baselines?.latency_ms?.p50 != null ? `p50 ${baseline.baselines.latency_ms.p50.toLocaleString()}ms` : null },
-                { label: 'Tokens', value: baseline.thresholds.total_tokens_max != null ? baseline.thresholds.total_tokens_max.toLocaleString() : '—', sub: baseline.baselines?.total_tokens?.p50 != null ? `p50 ${Math.round(baseline.baselines.total_tokens.p50).toLocaleString()}` : null },
-                { label: 'Cost', value: baseline.thresholds.cost_max != null ? `$${baseline.thresholds.cost_max.toFixed(4)}` : '—', sub: baseline.baselines?.cost?.p50 != null ? `p50 $${baseline.baselines.cost.p50.toFixed(4)}` : null },
-              ].map(({ label, value, sub }) => (
-                <div key={label} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">{label}</span>
-                  <div className="text-right">
-                    <span className="text-gray-300 font-mono text-xs">{value}</span>
-                    {sub && <div className="text-xs text-gray-600">{sub}</div>}
+      <SettingSection
+        title="L4 anomaly thresholds"
+        description="Latency, token, and cost limits for anomaly detection."
+      >
+        <div className="space-y-4">
+          <SegmentedControl
+            options={[{ value: 'dynamic' as const, label: 'dynamic' }, { value: 'manual' as const, label: 'manual' }]}
+            value={thresholdMode}
+            onChange={setThresholdMode}
+          />
+          {thresholdMode === 'dynamic' ? (
+            baseline ? (
+              <div className="space-y-2">
+                <p className="font-mono text-[10px] text-gray-700">
+                  {baseline.mode === 'dynamic'
+                    ? `Learned from ${baseline.calls_used} calls (p95). Updates automatically.`
+                    : `Static defaults active — ${baseline.calls_needed} more calls needed to adapt.`}
+                </p>
+                {[
+                  { label: 'Latency', value: baseline.thresholds.latency_ms_max != null ? `${baseline.thresholds.latency_ms_max.toLocaleString()}ms` : '—', sub: baseline.baselines?.latency_ms?.p50 != null ? `p50 ${baseline.baselines.latency_ms.p50.toLocaleString()}ms` : null },
+                  { label: 'Tokens',  value: baseline.thresholds.total_tokens_max != null ? baseline.thresholds.total_tokens_max.toLocaleString() : '—', sub: baseline.baselines?.total_tokens?.p50 != null ? `p50 ${Math.round(baseline.baselines.total_tokens.p50).toLocaleString()}` : null },
+                  { label: 'Cost',    value: baseline.thresholds.cost_max != null ? `$${baseline.thresholds.cost_max.toFixed(4)}` : '—', sub: baseline.baselines?.cost?.p50 != null ? `p50 $${baseline.baselines.cost.p50.toFixed(4)}` : null },
+                ].map(({ label, value, sub }) => (
+                  <div key={label} className="flex items-center justify-between border-b border-white/5 py-2 last:border-b-0">
+                    <span className="font-mono text-[11px] text-gray-600">{label}</span>
+                    <div className="text-right">
+                      <span className="font-mono text-[11px] text-gray-300">{value}</span>
+                      {sub && <div className="font-mono text-[10px] text-gray-700">{sub}</div>}
+                    </div>
                   </div>
+                ))}
+              </div>
+            ) : <p className="font-mono text-[10px] text-gray-700">loading baseline…</p>
+          ) : (
+            <div className="space-y-3">
+              <p className="font-mono text-[10px] text-gray-700">Override limits — leave blank to keep the static default.</p>
+              {[
+                { label: 'Max latency (ms)', placeholder: '10000', value: manualLatency, onChange: setManualLatency },
+                { label: 'Max total tokens', placeholder: '50000', value: manualTokens, onChange: setManualTokens },
+                { label: 'Max cost (USD)',   placeholder: '1.00',  value: manualCost,   onChange: setManualCost },
+              ].map(({ label, placeholder, value, onChange }) => (
+                <div key={label} className="flex items-center justify-between gap-4">
+                  <label className="font-mono text-[11px] text-gray-600 shrink-0">{label}</label>
+                  <input
+                    type="number" min="0" step="any" placeholder={placeholder} value={value}
+                    onChange={e => onChange(e.target.value)}
+                    className="w-36 bg-black border border-white/8 px-3 py-1.5 font-mono text-xs text-gray-300 placeholder-gray-700 focus:outline-none focus:border-white/20"
+                  />
                 </div>
               ))}
             </div>
-          ) : <p className="text-xs text-gray-600">Loading baseline…</p>
-        ) : (
-          <div className="space-y-3">
-            <p className="text-xs text-gray-600">Override limits — leave blank to keep the static default.</p>
-            {[
-              { label: 'Max latency (ms)', placeholder: '10000', value: manualLatency, onChange: setManualLatency },
-              { label: 'Max total tokens', placeholder: '50000', value: manualTokens, onChange: setManualTokens },
-              { label: 'Max cost (USD)', placeholder: '1.00', value: manualCost, onChange: setManualCost },
-            ].map(({ label, placeholder, value, onChange }) => (
-              <div key={label} className="flex items-center justify-between gap-4">
-                <label className="text-sm text-gray-400 shrink-0">{label}</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  placeholder={placeholder}
-                  value={value}
-                  onChange={e => onChange(e.target.value)}
-                  className="w-36 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-gray-100 font-mono placeholder-gray-600 focus:outline-none focus:border-gray-500"
-                />
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Budget */}
-      <div className="border border-gray-800 rounded-xl p-4 space-y-3">
-        <h3 className="text-sm font-semibold text-gray-300">Monthly budget</h3>
-        <p className="text-xs text-gray-600">Get a Slack alert when AI analysis spend crosses this amount in the current calendar month.</p>
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-gray-400">$</span>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            placeholder="e.g. 10.00"
-            value={budget}
-            onChange={e => setBudget(e.target.value)}
-            className="w-36 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-gray-100 font-mono placeholder-gray-600 focus:outline-none focus:border-gray-500"
-          />
-          <span className="text-xs text-gray-600">USD / month — leave blank to disable</span>
+          )}
         </div>
-      </div>
+      </SettingSection>
 
-      {/* Save — covers everything above */}
-      {msg && (
-        <p className={['text-sm', msg.ok ? 'text-green-400' : 'text-red-400'].join(' ')}>
-          {msg.text}
-        </p>
-      )}
-      <button
-        onClick={save}
-        disabled={saving}
-        className="px-5 py-2.5 bg-white text-gray-900 text-sm font-medium rounded-lg hover:bg-gray-100 disabled:opacity-50 transition-colors"
+      <SettingSection
+        title="Monthly budget"
+        description="Get a Slack alert when AI analysis spend crosses this amount in the current calendar month."
       >
-        {saving ? 'Saving…' : 'Save settings'}
-      </button>
-
-      {/* Project info */}
-      <div className="border border-gray-800 rounded-xl p-4 space-y-3">
-        <h3 className="text-sm font-semibold text-gray-300">Project details</h3>
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-gray-500">Project ID</span>
-            <code className="text-gray-400 font-mono text-xs">{project.id}</code>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-500">API key</span>
-            <code className="text-gray-400 font-mono text-xs">{project.API_KEY.slice(0, 12)}…</code>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-500">Created</span>
-            <span className="text-gray-400 text-xs">{new Date(project.created_at).toLocaleDateString()}</span>
-          </div>
+        <div className="flex items-center gap-3">
+          <span className="font-mono text-xs text-gray-700">$</span>
+          <input
+            type="number" min="0" step="0.01" placeholder="e.g. 10.00" value={budget}
+            onChange={e => setBudget(e.target.value)}
+            className="w-36 bg-black border border-white/8 px-3 py-2 font-mono text-xs text-gray-300 placeholder-gray-700 focus:outline-none focus:border-white/20"
+          />
+          <span className="font-mono text-[10px] text-gray-700">USD / month — leave blank to disable</span>
         </div>
+      </SettingSection>
+
+      <div className="pt-8 border-t border-white/8">
+        {msg && <p className={['font-mono text-xs mb-4', msg.ok ? 'text-green-500' : 'text-red-400'].join(' ')}>{msg.text}</p>}
+        <button
+          onClick={save} disabled={saving}
+          className="font-mono text-xs font-bold px-5 py-2.5 bg-white text-black hover:bg-gray-100 disabled:opacity-50 transition-colors"
+        >
+          {saving ? 'saving…' : 'save settings'}
+        </button>
       </div>
+
+      <SettingSection title="Project details">
+        <div className="bg-[#0a0a0a] border border-white/8 divide-y divide-white/8">
+          {[
+            { label: 'Project ID', value: project.id, mono: true },
+            { label: 'API key',    value: `${project.API_KEY.slice(0, 12)}…`, mono: true },
+            { label: 'Created',   value: new Date(project.created_at).toLocaleDateString() },
+          ].map(({ label, value }) => (
+            <div key={label} className="flex items-center justify-between px-4 py-3">
+              <span className="font-mono text-[11px] text-gray-700">{label}</span>
+              <span className="font-mono text-[11px] text-gray-400">{value}</span>
+            </div>
+          ))}
+        </div>
+      </SettingSection>
 
     </div>
   );

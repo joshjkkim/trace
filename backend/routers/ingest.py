@@ -261,7 +261,7 @@ def _dynamic_l4_limits(project_id: str, step_profile_id: str | None = None) -> d
         return None
 
 
-def _run_anomaly_detection(payload: IngestPayload, project: dict | None, step_profile_id: str | None = None) -> None:
+def _run_anomaly_detection(payload: IngestPayload, project: dict | None, step_profile_id: str | None = None, trace_id: str | None = None) -> None:
     """Run in a background thread — score the call and persist any anomalies."""
     try:
         from anomaly.config import EvalConfig
@@ -292,11 +292,18 @@ def _run_anomaly_detection(payload: IngestPayload, project: dict | None, step_pr
         # L5: inject per-step statistical baseline when available
         if step_profile_id:
             from services.baseline_service import compute_baseline
-            baseline = compute_baseline(step_profile_id)
+            baseline = compute_baseline(step_profile_id, model=payload.model)
             if baseline:
                 config = EvalConfig(**{**config.model_dump(), "baseline": baseline})
                 print(f"[anomaly] L5 baseline for profile={step_profile_id}: n={baseline.sample_count}")
         result = evaluate_call(call_input, config)
+
+        # Mark the CALLS row so it's excluded from future baselines
+        if result.triggered and trace_id:
+            try:
+                get_client().table("CALLS").update({"anomaly_triggered": True}).eq("id", trace_id).execute()
+            except Exception as exc:
+                print(f"[anomaly] failed to mark anomaly_triggered for trace={trace_id}: {exc}")
         print(f"[anomaly] run={payload.run_id} step={payload.step_name} score={result.total_score} triggered={result.triggered} layer={result.stopped_at_layer} codes={dict(result.error_map)}")
 
         # Performance transaction for every call — fires even if no anomaly
@@ -367,7 +374,7 @@ def _run_fingerprint_then_anomaly(payload: IngestPayload, project: dict | None, 
         except Exception as exc:
             print(f"[fingerprint] failed: {exc}")
 
-    _run_anomaly_detection(payload, project, step_profile_id=step_profile_id)
+    _run_anomaly_detection(payload, project, step_profile_id=step_profile_id, trace_id=trace_id)
 
 
 @router.post("/ingest", response_model=IngestResponse)

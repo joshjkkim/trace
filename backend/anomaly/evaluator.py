@@ -1,6 +1,6 @@
 """evaluate_call — run the weighted layers in order and produce an EvalResult.
 
-Layers run L1 -> L2 -> L3 -> L4. Each fired condition contributes its penalty to
+Layers run L1 -> L2 -> L4 -> L5. Each fired condition contributes its penalty to
 a running total via error_map. After each layer we check the threshold: once
 total_score >= threshold the call is anomalous and we short-circuit, recording
 which layer we stopped at.
@@ -16,17 +16,16 @@ from __future__ import annotations
 from .config import EvalConfig
 from .layers.layer_1_hard import run_layer_1_hard
 from .layers.layer_2_regex import run_layer_2_regex
-from .layers.layer_3_fingerprinting import run_layer_3_fingerprinting
 from .layers.layer_4_integers import run_layer_4_integers
 from .layers.layer_5_statistical import run_layer_5_statistical
 from .schemas import CallInput, EvalHit, EvalResult, LayerId
 from .shape_classifier import classify_shape
 
 # Ordered pipeline. (layer_id, runner) — order is the scoring order.
+# L3 was removed — heuristic shape checks overlapped with L2 and added noise.
 _LAYERS: list[tuple[LayerId, object]] = [
     ("L1_hard",        run_layer_1_hard),
     ("L2_format",      run_layer_2_regex),
-    ("L3_fingerprint", run_layer_3_fingerprinting),
     ("L4_integers",    run_layer_4_integers),
     ("L5_statistical", run_layer_5_statistical),
 ]

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { Badge, StatCard, CopyButton } from '@/components/ui';
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
 
@@ -27,30 +28,6 @@ function timeAgo(iso: string | null): string {
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}h ago`;
   return `${Math.floor(h / 24)}d ago`;
-}
-
-function StatusDot({ errorRate }: { errorRate: number }) {
-  if (errorRate === 0) return <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />;
-  if (errorRate < 0.1) return <span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" />;
-  return <span className="w-2 h-2 rounded-full bg-red-400 inline-block" />;
-}
-
-function CopyButton({ value }: { value: string }) {
-  const [copied, setCopied] = useState(false);
-  function copy(e: React.MouseEvent) {
-    e.preventDefault();
-    navigator.clipboard.writeText(value);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }
-  return (
-    <button
-      onClick={copy}
-      className="text-xs text-gray-500 hover:text-gray-300 transition-colors ml-2 shrink-0"
-    >
-      {copied ? 'copied' : 'copy'}
-    </button>
-  );
 }
 
 export default function Dashboard() {
@@ -90,30 +67,27 @@ export default function Dashboard() {
   const totalAnomalies = projects.reduce((s, p) => s + p.anomaly_count, 0);
 
   return (
-    <main className="min-h-screen bg-gray-950 text-gray-100">
-      {/* Header */}
-      <div className="border-b border-gray-800">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+    <main className="min-h-screen bg-black text-white antialiased">
+
+      {/* Nav */}
+      <div className="border-b border-white/8">
+        <div className="max-w-5xl mx-auto px-6 h-12 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/logo.svg" alt="trace.ai" className="w-7 h-7" />
-            <span className="text-lg font-semibold tracking-tight">trace.ai</span>
-            <span className="text-gray-700">|</span>
-            <span className="text-sm text-gray-500">{email}</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <a href="/docs" className="text-sm text-gray-400 hover:text-white transition-colors">Docs</a>
-            <a href="/settings" className="text-sm text-gray-400 hover:text-white transition-colors">Settings</a>
-            <a
-              href="/create-project"
-              className="text-sm bg-white text-gray-950 px-3 py-1.5 rounded-lg font-medium hover:bg-gray-100 transition-colors"
-            >
-              + New project
+            <a href="/" className="flex items-center gap-2 font-sans font-black text-sm text-white">
+              <img src="/logo.svg" alt="trace.ai" className="w-5 h-5" />
+              trace.ai
             </a>
-            <button
-              onClick={signOut}
-              className="text-sm text-gray-500 hover:text-white transition-colors"
-            >
-              Sign out
+            <span className="text-white/10">|</span>
+            <span className="font-mono text-[11px] text-gray-600">{email}</span>
+          </div>
+          <div className="flex items-center gap-5">
+            <a href="/docs" className="font-mono text-[11px] text-gray-600 hover:text-white transition-colors">docs</a>
+            <a href="/settings" className="font-mono text-[11px] text-gray-600 hover:text-white transition-colors">settings</a>
+            <a href="/create-project" className="font-mono text-[11px] font-bold px-4 py-1.5 bg-violet-600 hover:bg-violet-500 text-white transition-colors">
+              + new project
+            </a>
+            <button onClick={signOut} className="font-mono text-[11px] text-gray-700 hover:text-white transition-colors">
+              sign out
             </button>
           </div>
         </div>
@@ -121,93 +95,84 @@ export default function Dashboard() {
 
       <div className="max-w-5xl mx-auto px-6 py-8">
         {loading ? (
-          <div className="text-gray-600 text-sm">Loading…</div>
+          <div className="font-mono text-xs text-gray-700 py-8">loading…</div>
         ) : projects.length === 0 ? (
           <div className="text-center py-32">
-            <div className="text-4xl mb-4">◎</div>
-            <p className="text-gray-400 font-medium mb-1">No projects yet</p>
-            <p className="text-gray-600 text-sm mb-6">Create a project to start tracing your AI workflows</p>
+            <p className="font-sans font-black text-2xl text-white mb-2">No projects yet</p>
+            <p className="font-mono text-xs text-gray-600 mb-8">Create a project to start tracing your AI workflows</p>
             <a
               href="/create-project"
-              className="text-sm bg-white text-gray-950 px-4 py-2 rounded-lg font-medium hover:bg-gray-100 transition-colors"
+              className="font-mono text-xs font-bold px-6 py-3 bg-violet-600 hover:bg-violet-500 text-white transition-colors"
             >
-              Create first project
+              create first project →
             </a>
           </div>
         ) : (
           <>
             {/* Summary strip */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-              {[
-                { label: 'Total calls', value: totalCalls.toLocaleString() },
-                { label: 'Errors', value: totalErrors.toLocaleString(), dim: totalErrors === 0 },
-                { label: 'Anomalies flagged', value: totalAnomalies.toLocaleString(), dim: totalAnomalies === 0 },
-              ].map(({ label, value, dim }) => (
-                <div key={label} className="bg-gray-900 border border-gray-800 rounded-xl px-5 py-4">
-                  <div className={`text-2xl font-semibold ${dim ? 'text-gray-600' : 'text-gray-100'}`}>{value}</div>
-                  <div className="text-xs text-gray-500 mt-1">{label}</div>
-                </div>
-              ))}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-white/8 mb-8">
+              <StatCard label="Total calls"       value={totalCalls.toLocaleString()} />
+              <StatCard label="Errors"            value={totalErrors.toLocaleString()} alert={totalErrors > 0} />
+              <StatCard label="Anomalies flagged" value={totalAnomalies.toLocaleString()} alert={totalAnomalies > 0} />
             </div>
 
-            {/* Project cards */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-sm font-medium text-gray-400">Projects ({projects.length})</h2>
-              </div>
-              {projects.map((p) => {
-                const errorRate = p.call_count > 0 ? p.error_count / p.call_count : 0;
-                return (
-                  <a
-                    key={p.id}
-                    href={`/dashboard/${p.id}`}
-                    className="block bg-gray-900 border border-gray-800 rounded-xl px-5 py-4 hover:border-gray-600 transition-colors group"
-                  >
-                    <div className="flex items-start justify-between gap-4">
+            {/* Project list */}
+            <div>
+              <p className="font-mono text-[10px] text-gray-700 uppercase tracking-widest mb-3">
+                Projects ({projects.length})
+              </p>
+              <div className="bg-[#0a0a0a] border border-white/8 divide-y divide-white/8">
+                {projects.map((p) => {
+                  const errorRate = p.call_count > 0 ? p.error_count / p.call_count : 0;
+                  const statusVariant = errorRate === 0 ? 'ok' : errorRate < 0.1 ? 'warning' : 'error';
+                  return (
+                    <a
+                      key={p.id}
+                      href={`/dashboard/${p.id}`}
+                      className="flex items-center justify-between gap-6 px-5 py-4 hover:bg-white/2 transition-colors group"
+                    >
                       {/* Left */}
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <StatusDot errorRate={errorRate} />
-                          <span className="font-medium text-gray-100 group-hover:text-white transition-colors">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <Badge variant={statusVariant}>{statusVariant}</Badge>
+                          <span className="font-sans font-bold text-sm text-white group-hover:text-white transition-colors">
                             {p.name}
                           </span>
-                          <span className="text-xs text-gray-600">#{p.id}</span>
+                          <span className="font-mono text-[10px] text-gray-700">#{p.id.slice(0, 8)}</span>
                         </div>
-                        <div className="flex items-center min-w-0">
-                          <code className="text-xs text-green-400 font-mono truncate">
-                            {p.API_KEY}
-                          </code>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <code className="font-mono text-[11px] text-green-500 truncate">{p.API_KEY}</code>
                           <CopyButton value={p.API_KEY} />
                         </div>
                       </div>
 
                       {/* Stats */}
-                      <div className="flex items-center gap-6 shrink-0 text-right">
+                      <div className="flex items-center gap-8 shrink-0 text-right">
                         <div>
-                          <div className="text-lg font-semibold text-gray-100">{p.call_count.toLocaleString()}</div>
-                          <div className="text-xs text-gray-500">calls</div>
+                          <div className="font-sans font-black text-lg text-white">{p.call_count.toLocaleString()}</div>
+                          <div className="font-mono text-[10px] text-gray-700">calls</div>
                         </div>
                         <div>
-                          <div className={`text-lg font-semibold ${p.error_count > 0 ? 'text-red-400' : 'text-gray-600'}`}>
+                          <div className={`font-sans font-black text-lg ${p.error_count > 0 ? 'text-red-400' : 'text-gray-800'}`}>
                             {p.error_count}
                           </div>
-                          <div className="text-xs text-gray-500">errors</div>
+                          <div className="font-mono text-[10px] text-gray-700">errors</div>
                         </div>
                         <div>
-                          <div className={`text-lg font-semibold ${p.anomaly_count > 0 ? 'text-yellow-400' : 'text-gray-600'}`}>
+                          <div className={`font-sans font-black text-lg ${p.anomaly_count > 0 ? 'text-yellow-400' : 'text-gray-800'}`}>
                             {p.anomaly_count}
                           </div>
-                          <div className="text-xs text-gray-500">anomalies</div>
+                          <div className="font-mono text-[10px] text-gray-700">anomalies</div>
                         </div>
-                        <div className="text-right">
-                          <div className="text-sm text-gray-400">{timeAgo(p.last_active)}</div>
-                          <div className="text-xs text-gray-600">last active</div>
+                        <div>
+                          <div className="font-mono text-xs text-gray-400">{timeAgo(p.last_active)}</div>
+                          <div className="font-mono text-[10px] text-gray-700">last active</div>
                         </div>
                       </div>
-                    </div>
-                  </a>
-                );
-              })}
+                    </a>
+                  );
+                })}
+              </div>
             </div>
           </>
         )}
