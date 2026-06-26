@@ -69,25 +69,52 @@ function Rows({ items }: { items: { key: string; label?: string; color?: string;
   );
 }
 
+type Lang = 'ts' | 'py';
+
+function LangSwitch({ lang, setLang }: { lang: Lang; setLang: (l: Lang) => void }) {
+  return (
+    <div className="flex border border-white/8 mb-8 w-fit">
+      {(['ts', 'py'] as Lang[]).map((l, i) => (
+        <button
+          key={l}
+          onClick={() => setLang(l)}
+          className={[
+            'px-4 py-1.5 font-mono text-xs transition-colors',
+            i === 0 ? 'border-r border-white/8' : '',
+            lang === l ? 'bg-white/5 text-white' : 'text-gray-600 hover:text-gray-400',
+          ].join(' ')}
+        >
+          {l === 'ts' ? 'TypeScript' : 'Python'}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ── Sections ──────────────────────────────────────────────────────────────────
 
 type Section = 'start' | 'sdk' | 'detection' | 'integrations';
 
 const SECTIONS: { id: Section; label: string; sub: string }[] = [
   { id: 'start',        label: 'Getting started', sub: 'quick start, concepts, install' },
-  { id: 'sdk',          label: 'SDK reference',   sub: 'Tracer, run(), streaming, steps' },
+  { id: 'sdk',          label: 'SDK reference',   sub: 'TypeScript · Python / LangChain' },
   { id: 'detection',    label: 'Anomaly detection', sub: 'L1–L5, step identity, trends' },
   { id: 'integrations', label: 'Integrations',    sub: 'Slack, Sentry' },
 ];
 
 // ── Section: Getting started ──────────────────────────────────────────────────
 
-function SectionStart() {
+function SectionStart({ lang, setLang }: { lang: Lang; setLang: (l: Lang) => void }) {
   return (
     <div>
       <H2>Quick start</H2>
       <P>Two lines to start tracing every LLM call — tokens, latency, cost, and anomaly scores captured automatically.</P>
-      <Code>{`import { Tracer } from '@trace-ai/sdk'
+
+      <LangSwitch lang={lang} setLang={setLang} />
+
+      {lang === 'ts' ? (
+        <>
+          <Code>{`import { Tracer } from '@trace-ai/sdk'
 import Anthropic from '@anthropic-ai/sdk'
 
 const tracer    = new Tracer({ apiKey: 'trace_...' })
@@ -100,30 +127,70 @@ const response = await anthropic.messages.create({
   messages: [{ role: 'user', content: 'Hello!' }],
 })
 // Every call is now traced in your dashboard`}</Code>
-      <Callout type="info">
-        Find your API key in the dashboard under <strong className="text-gray-300">Settings → API Key</strong> for each project.
-      </Callout>
+          <Callout type="info">
+            Find your API key in the dashboard under <strong className="text-gray-300">Settings → API Key</strong> for each project.
+          </Callout>
+        </>
+      ) : (
+        <>
+          <Code lang="bash">{`pip install trace-ai-python[langchain]`}</Code>
+          <Code lang="python">{`from traceai import Tracer
+from traceai.langchain import TraceAICallbackHandler
+from langchain_anthropic import ChatAnthropic
+
+tracer  = Tracer(api_key="trace_...")
+handler = TraceAICallbackHandler(tracer)
+
+# Attach to any LangChain LLM — works with Anthropic, OpenAI, Gemini, etc.
+llm = ChatAnthropic(model="claude-haiku-4-5-20251001", callbacks=[handler])
+llm.invoke([{"role": "user", "content": "Hello!"}])
+# Every call is now traced in your dashboard`}</Code>
+          <Callout type="info">
+            Find your API key in the dashboard under <strong className="text-gray-300">Settings → API Key</strong> for each project.
+          </Callout>
+        </>
+      )}
 
       <H2>Core concepts</H2>
       <Rows items={[
         { key: 'Project', value: 'An isolated workspace with its own API key, dashboard, and alert config. One API key = one project.' },
         { key: 'Run',     value: 'A single end-to-end execution of your AI pipeline — one user request handled by multiple steps. All steps sharing a run_id are grouped together.' },
-        { key: 'Step',    value: 'A single LLM call within a run. Named with _trace: { stepName }. Captures model, tokens, latency, cost, and output.' },
+        { key: 'Step',    value: 'A single LLM call within a run. Named with _trace: { stepName } (TS) or config metadata (Python). Captures model, tokens, latency, cost, and output.' },
         { key: 'Profile', value: 'The semantic identity of a step — derived from its system prompt embedding. Stable across renames and minor prompt tweaks. Foundation of per-step baselines.' },
       ]} />
 
       <H2>Installation</H2>
-      <Code lang="bash">npm install @trace-ai/sdk</Code>
-      <P>No background processes, no native dependencies. Works in Node.js 18+ and any runtime with the Fetch API.</P>
+      {lang === 'ts' ? (
+        <>
+          <Code lang="bash">npm install @trace-ai/sdk</Code>
+          <P>No background processes, no native dependencies. Works in Node.js 18+ and any runtime with the Fetch API.</P>
+        </>
+      ) : (
+        <>
+          <Code lang="bash">{`pip install trace-ai-python              # core only
+pip install trace-ai-python[langchain]   # + LangChain callback handler`}</Code>
+          <P>No background processes. Works in Python 3.9+. The LangChain extra adds langchain-core — no other dependencies.</P>
+        </>
+      )}
     </div>
   );
 }
 
 // ── Section: SDK reference ────────────────────────────────────────────────────
 
-function SectionSDK() {
+function SectionSDK({ lang, setLang }: { lang: Lang; setLang: (l: Lang) => void }) {
   return (
     <div>
+      <LangSwitch lang={lang} setLang={setLang} />
+
+      {lang === 'ts' ? <SectionSDKTS /> : <SectionSDKPy />}
+    </div>
+  );
+}
+
+function SectionSDKTS() {
+  return (
+    <>
       <H2>new Tracer(config)</H2>
       <P>The entry point. Create one instance per application.</P>
       <Code>{`const tracer = new Tracer({
@@ -161,7 +228,7 @@ await anthropic.messages.create({
   const c1 = await run.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 16,
-    system: 'Classify as: billing, technical, general, feature-request. Reply with just the category.',
+    system: 'Classify as: billing, technical, general. Reply with just the category.',
     messages: [{ role: 'user', content: userMessage }],
     _trace: { stepName: 'classify-intent' },
   } as TracedMessageParams)
@@ -232,7 +299,7 @@ await run.messages.create({
         { f: 'step_name',      d: 'Human-readable name. Shown in the dashboard and analysis reports.' },
         { f: 'step_index',     d: 'Order within the run. Steps are sorted by this in the run graph.' },
         { f: 'model',          d: 'Model identifier string, e.g. "claude-haiku-4-5-20251001".' },
-        { f: 'prompt',         d: 'The prompt sent to the model. For chat, use JSON.stringify({ system, messages }). The system field is used for step fingerprinting.' },
+        { f: 'prompt',         d: 'The prompt sent to the model. Use JSON.stringify({ system, messages }) — the system field is used for step fingerprinting.' },
         { f: 'input_tokens',   d: 'Input token count as reported by the model.' },
         { f: 'output_tokens',  d: 'Output token count.' },
         { f: 'total_tokens',   d: 'Should equal input + output. Mismatch triggers anomaly code 1007.' },
@@ -242,7 +309,113 @@ await run.messages.create({
         { f: 'output_code',    d: "The model's response text. Used by the anomaly engine for shape analysis." },
         { f: 'error',          d: 'Error message. Required when status_success is false.' },
       ]} />
-    </div>
+    </>
+  );
+}
+
+function SectionSDKPy() {
+  return (
+    <>
+      <H2>Tracer(api_key, api_url)</H2>
+      <P>The entry point. Create one instance per application.</P>
+      <Code lang="python">{`from traceai import Tracer
+
+tracer = Tracer(
+    api_key = "trace_...",                 # required
+    api_url = "https://...",               # optional — override for local dev
+)`}</Code>
+      <Table rows={[
+        { f: 'api_key', t: 'str',   d: 'Your project API key. Required.' },
+        { f: 'api_url', t: 'str',   d: 'Custom ingest URL. Defaults to trace-ai servers.' },
+      ]} />
+
+      <H2>TraceAICallbackHandler</H2>
+      <P>LangChain callback handler — attach to any LangChain LLM or chain. Works with Anthropic, OpenAI, Gemini, Cohere, and every other LangChain-supported provider.</P>
+      <Code lang="python">{`from traceai.langchain import TraceAICallbackHandler
+from langchain_anthropic import ChatAnthropic
+
+handler = TraceAICallbackHandler(tracer)
+
+# Option 1 — attach at LLM level (traces all calls on this LLM)
+llm = ChatAnthropic(model="claude-haiku-4-5-20251001", callbacks=[handler])
+
+# Option 2 — attach at invoke level (one-off)
+llm.invoke([...], config={"callbacks": [handler]})`}</Code>
+
+      <H2>Naming steps</H2>
+      <P>Pass <code className="text-violet-400 font-mono">step_name</code> in config metadata. Without it, the step is labeled from the LangChain model name (e.g. <code className="text-violet-400 font-mono">ChatAnthropic</code>).</P>
+      <Code lang="python">{`chain.invoke(
+    {"text": "..."},
+    config={"metadata": {"step_name": "summarize"}},
+)`}</Code>
+      <Callout type="tip">
+        <strong className="text-gray-300">Keep system prompts as static templates.</strong> trace.ai uses the system prompt to build a stable semantic fingerprint. Dynamic system prompts create a new step profile on every call. Put user-specific data in the human message, not the system prompt.
+      </Callout>
+
+      <H2>Multi-step pipelines</H2>
+      <P>Steps inside a single <code className="text-violet-400 font-mono">chain.invoke()</code> are automatically grouped into one run. Wrap your workflow in <code className="text-violet-400 font-mono">RunnableLambda</code> and pass config through to each nested <code className="text-violet-400 font-mono">llm.invoke()</code>:</P>
+      <Code lang="python">{`from langchain_core.runnables import RunnableLambda
+from langchain_core.messages import SystemMessage, HumanMessage
+
+def workflow(inputs, config):
+    intent = llm.invoke(
+        [SystemMessage(content="Classify as: billing, technical, general."),
+         HumanMessage(content=inputs["message"])],
+        config={**config, "metadata": {"step_name": "classify-intent"}},
+    )
+    reply = llm.invoke(
+        [SystemMessage(content="You are a support agent. Be concise."),
+         HumanMessage(content=inputs["message"])],
+        config={**config, "metadata": {"step_name": "generate-reply"}},
+    )
+    return reply.content
+
+chain = RunnableLambda(workflow)
+chain.invoke({"message": "..."}, config={"callbacks": [handler]})
+# → both steps share one run_id in the dashboard`}</Code>
+
+      <H2>Manual ingest</H2>
+      <P>For models outside LangChain — external APIs, custom models, pre-computed results — use <code className="text-violet-400 font-mono">tracer.ingest()</code> directly. Fire-and-forget: posts in a background thread, never blocks.</P>
+      <Code lang="python">{`import time, json
+
+start = time.monotonic()
+# ... your model call ...
+latency_ms = int((time.monotonic() - start) * 1000)
+
+tracer.ingest(
+    run_id        = "my-run-id",
+    step_name     = "fetch-context",
+    step_index    = 0,
+    model         = "my-model",
+    prompt        = json.dumps({"messages": [{"role": "system", "content": "..."},
+                                             {"role": "user",   "content": "..."}]}),
+    input_tokens  = 120,
+    output_tokens = 48,
+    total_tokens  = 168,
+    latency_ms    = latency_ms,
+    cost          = 0.0014,
+    status_success= True,
+    output_code   = "The user wants a refund.",
+)`}</Code>
+      <Callout type="info">
+        For step fingerprinting to work correctly, include the system prompt as <code className="text-gray-300">{`{"role": "system", "content": "..."}`}</code> inside the messages array — or as a top-level <code className="text-gray-300">system</code> field. The system prompt is the stable identity of the step.
+      </Callout>
+      <Table rows={[
+        { f: 'run_id',         d: 'Groups steps into one run. Any UUID string.' },
+        { f: 'step_name',      d: 'Human-readable name shown in the dashboard.' },
+        { f: 'step_index',     d: 'Order within the run.' },
+        { f: 'model',          d: 'Model identifier string, e.g. "claude-haiku-4-5-20251001".' },
+        { f: 'prompt',         d: 'JSON-serialized messages. Include system prompt for fingerprinting.' },
+        { f: 'input_tokens',   d: 'Input token count as reported by the model.' },
+        { f: 'output_tokens',  d: 'Output token count.' },
+        { f: 'total_tokens',   d: 'Should equal input + output. Mismatch triggers anomaly code 1007.' },
+        { f: 'latency_ms',     d: 'Wall-clock time from request start to response received.' },
+        { f: 'cost',           d: 'USD cost for this call.' },
+        { f: 'status_success', d: 'True if the call completed, False if it errored.' },
+        { f: 'output_code',    d: "The model's response text. Used for shape analysis." },
+        { f: 'error',          d: 'Error message string. Required when status_success is False.' },
+      ]} />
+    </>
   );
 }
 
@@ -291,9 +464,9 @@ function SectionDetection() {
       </div>
       <P>A call fires L5 when log(observed) falls outside the fence. The reported score is how many IQR-widths beyond the fence the value sits — e.g. <code className="text-violet-400 font-mono">+3.2×IQR</code> means the log-value is 3.2 fence-widths above the upper fence. This is multiplicative detection: &quot;is this call 5× more expensive than the 75th percentile?&quot; rather than additive &quot;is this call $0.50 above the mean?&quot;</P>
       <Rows items={[
-        { key: '5001', label: 'latency_iqr_fence',    color: 'text-violet-400', value: 'Call latency falls outside the Tukey fence in log space (multiplicative latency spike).' },
-        { key: '5002', label: 'tokens_iqr_fence',     color: 'text-violet-400', value: 'Total token count falls outside the fence — abnormally large or small output for this step.' },
-        { key: '5003', label: 'cost_iqr_fence',       color: 'text-violet-400', value: 'Call cost falls outside the fence — typically caused by unexpected token growth.' },
+        { key: '5001', label: 'latency_iqr_fence',       color: 'text-violet-400', value: 'Call latency falls outside the Tukey fence in log space (multiplicative latency spike).' },
+        { key: '5002', label: 'tokens_iqr_fence',        color: 'text-violet-400', value: 'Total token count falls outside the fence — abnormally large or small output for this step.' },
+        { key: '5003', label: 'cost_iqr_fence',          color: 'text-violet-400', value: 'Call cost falls outside the fence — typically caused by unexpected token growth.' },
         { key: '5004', label: 'output_tokens_iqr_fence', color: 'text-violet-400', value: 'Output token count alone falls outside the fence, independent of input.' },
       ]} />
       <Callout type="tip">
@@ -380,11 +553,12 @@ function SectionIntegrations() {
 
 export default function DocsPage() {
   const [active, setActive] = useState<Section>('start');
+  const [lang, setLang] = useState<Lang>('ts');
   const idx = SECTIONS.findIndex(s => s.id === active);
 
   const content: Record<Section, React.ReactNode> = {
-    start:        <SectionStart />,
-    sdk:          <SectionSDK />,
+    start:        <SectionStart lang={lang} setLang={setLang} />,
+    sdk:          <SectionSDK lang={lang} setLang={setLang} />,
     detection:    <SectionDetection />,
     integrations: <SectionIntegrations />,
   };

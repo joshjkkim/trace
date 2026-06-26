@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "trace-ai-python"
+version = "0.1.0"
+description = "Observability for LLM workflows — tokens, latency, cost, and anomaly detection"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "trace.ai", email = "jjkk@umich.edu" }]
+keywords = ["llm", "observability", "tracing", "langchain", "anthropic", "openai"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = []
+
+[project.optional-dependencies]
+langchain = ["langchain-core>=0.1.0"]
+
+[project.urls]
+Homepage = "https://use-trace-ai.vercel.app"
+Repository = "https://github.com/joshuakim314/trace"
+
+[tool.hatch.build.targets.wheel]
+packages = ["traceai"]

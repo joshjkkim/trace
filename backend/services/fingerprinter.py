@@ -36,13 +36,28 @@ def _embed(text: str) -> list[float]:
 
 
 def _extract_kernel(prompt_json: str) -> str:
-    """Pull the stable instruction part out of the SDK's {system, messages} JSON."""
+    """Pull the stable instruction part out of the prompt JSON.
+
+    Supports two formats:
+      TS SDK:  {"system": "...", "messages": [...]}
+      LangChain/Python: {"messages": [{"role": "system", ...}, ...]}
+    The system prompt is the stable identity of a step; user messages vary per call.
+    """
     try:
         obj = json.loads(prompt_json)
         if isinstance(obj, dict):
+            # TS SDK format — top-level system field
             if obj.get("system"):
                 return str(obj["system"])[:500]
-            for msg in obj.get("messages", []):
+            msgs = obj.get("messages", [])
+            # LangChain format — system message inside messages array
+            for msg in msgs:
+                if isinstance(msg, dict) and msg.get("role") == "system":
+                    content = msg.get("content", "")
+                    text = content if isinstance(content, str) else str(content)
+                    return text[:500]
+            # Fallback: first user message
+            for msg in msgs:
                 if isinstance(msg, dict) and msg.get("role") == "user":
                     content = msg.get("content", "")
                     text = content if isinstance(content, str) else str(content)
