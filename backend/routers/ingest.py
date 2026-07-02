@@ -96,7 +96,7 @@ def _fire_user_sentry_performance(
         start = now - datetime.timedelta(milliseconds=payload.latency_ms or 0)
 
         # Deterministic trace_id from run_id so all steps in a run share the same trace
-        trace_id   = _uuid.uuid5(_uuid.NAMESPACE_URL, f"trace-ai:{payload.run_id}").hex  # 32 hex
+        trace_id   = _uuid.uuid5(_uuid.NAMESPACE_URL, f"cernova:{payload.run_id}").hex  # 32 hex
         span_id    = _uuid.uuid4().hex[:16]
         child_span = _uuid.uuid4().hex[:16]
         status     = "ok" if payload.status_success else "internal_error"
@@ -114,10 +114,10 @@ def _fire_user_sentry_performance(
                     "op": "ai.inference",
                     "status": status,
                     "data": {
-                        "trace_ai.run_id": payload.run_id,
-                        "trace_ai.project": project_name,
-                        "trace_ai.anomaly_score": anomaly_score,
-                        "trace_ai.triggered": triggered,
+                        "cernova.run_id": payload.run_id,
+                        "cernova.project": project_name,
+                        "cernova.anomaly_score": anomaly_score,
+                        "cernova.triggered": triggered,
                     },
                 }
             },
@@ -149,13 +149,13 @@ def _fire_user_sentry_performance(
                 "anomaly_score": {"value": anomaly_score,                                  "unit": "none"},
             },
             "tags": {
-                "trace_ai.run_id":     payload.run_id,
-                "trace_ai.model":      payload.model or "unknown",
-                "trace_ai.step":       payload.step_name or "unknown",
-                "trace_ai.step_index": str(payload.step_index or 0),
-                "trace_ai.project":    project_name,
-                "trace_ai.success":    str(payload.status_success),
-                "trace_ai.triggered":  str(triggered),
+                "cernova.run_id":     payload.run_id,
+                "cernova.model":      payload.model or "unknown",
+                "cernova.step":       payload.step_name or "unknown",
+                "cernova.step_index": str(payload.step_index or 0),
+                "cernova.project":    project_name,
+                "cernova.success":    str(payload.status_success),
+                "cernova.triggered":  str(triggered),
             },
             "level": "error" if triggered else "info",
         }
@@ -176,19 +176,19 @@ def _fire_user_sentry(dsn: str, payload: IngestPayload, result, project_name: st
             f"{code}+{int(pts)}pts" for code, pts in result.error_map.items()
         )
         scope = Scope()
-        scope.set_tag("trace_ai.project", project_name)
-        scope.set_tag("trace_ai.step", payload.step_name)
-        scope.set_tag("trace_ai.model", payload.model)
-        scope.set_tag("trace_ai.layer", str(result.stopped_at_layer))
+        scope.set_tag("cernova.project", project_name)
+        scope.set_tag("cernova.step", payload.step_name)
+        scope.set_tag("cernova.model", payload.model)
+        scope.set_tag("cernova.layer", str(result.stopped_at_layer))
         scope.set_extra("run_id", payload.run_id)
         scope.set_extra("total_score", result.total_score)
         scope.set_extra("threshold", result.threshold)
         scope.set_extra("error_map", dict(result.error_map))
-        scope.fingerprint = ["trace-ai", "anomaly", payload.step_name or "unknown"]
+        scope.fingerprint = ["cernova", "anomaly", payload.step_name or "unknown"]
         level = "error" if result.triggered else "warning"
         event_id = user_client.capture_event(
             {
-                "message": f"[trace.ai] {'Critical anomaly' if result.triggered else 'Anomaly warning'} in '{payload.step_name}' — {result.total_score}pts ({codes_summary})",
+                "message": f"[Cernova] {'Critical anomaly' if result.triggered else 'Anomaly warning'} in '{payload.step_name}' — {result.total_score}pts ({codes_summary})",
                 "level": level,
             },
             scope=scope,

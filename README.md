@@ -1,4 +1,4 @@
-# trace.ai
+# Cernova
 
 Datadog + Sentry for AI workflows. Wraps LLM calls to capture tokens, latency, and cost in real time, streams traces to a FastAPI backend, and displays them live on a Next.js dashboard.
 
@@ -6,7 +6,7 @@ Datadog + Sentry for AI workflows. Wraps LLM calls to capture tokens, latency, a
 
 | Directory | What it is |
 |---|---|
-| `sdk/` | TypeScript tracing SDK (`@trace-ai/sdk`) |
+| `sdk/` | TypeScript tracing SDK (`/sdk`) |
 | `backend/` | FastAPI ingest API + Supabase integration |
 | `frontend/` | Next.js live dashboard (Supabase Realtime) |
 | `sample-app/` | End-to-end demo using the SDK against the real backend |
@@ -103,7 +103,7 @@ npm run seed
 
 ```
 Your app
-  └─ @trace-ai/sdk (wrapAnthropic)
+  └─ /sdk (wrapAnthropic)
        ├─ calls Anthropic normally → returns response unchanged
        └─ fire-and-forget POST /ingest → FastAPI backend
                                               └─ Supabase INSERT into CALLS

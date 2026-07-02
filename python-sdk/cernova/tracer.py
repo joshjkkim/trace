@@ -13,8 +13,8 @@ from urllib import request as _urllib_request
 _DEFAULT_URL = "https://trace-production-940c.up.railway.app"
 
 # ContextVar so run_id propagates automatically across async/threaded code
-_active_run_id: ContextVar[str | None] = ContextVar("traceai_run_id", default=None)
-_active_step_index: ContextVar[int] = ContextVar("traceai_step_index", default=0)
+_active_run_id: ContextVar[str | None] = ContextVar("cernova_run_id", default=None)
+_active_step_index: ContextVar[int] = ContextVar("cernova_step_index", default=0)
 
 
 def _new_uuid() -> str:
@@ -23,7 +23,7 @@ def _new_uuid() -> str:
 
 class Tracer:
     """
-    trace.ai Python client.
+    Cernova Python client.
 
     Usage::
 
@@ -44,12 +44,12 @@ class Tracer:
             output_code="billing",
         )
 
-        # LangChain — see traceai.langchain.TraceAICallbackHandler
+        # LangChain — see cernova.langchain.CernovaCallbackHandler
     """
 
     def __init__(self, api_key: str, api_url: str = "") -> None:
         self.api_key = api_key
-        # Empty string falls back to default so that os.environ.get("TRACE_API_URL", "")
+        # Empty string falls back to default so that os.environ.get("CERNOVA_API_URL", "")
         # behaves the same as not passing api_url at all.
         self.api_url = (api_url or _DEFAULT_URL).rstrip("/")
 

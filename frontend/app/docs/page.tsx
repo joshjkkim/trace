@@ -114,7 +114,7 @@ function SectionStart({ lang, setLang }: { lang: Lang; setLang: (l: Lang) => voi
 
       {lang === 'ts' ? (
         <>
-          <Code>{`import { Tracer } from '@trace-ai/sdk'
+          <Code>{`import { Tracer } from '@cernova/sdk'
 import Anthropic from '@anthropic-ai/sdk'
 
 const tracer    = new Tracer({ apiKey: 'trace_...' })
@@ -133,13 +133,13 @@ const response = await anthropic.messages.create({
         </>
       ) : (
         <>
-          <Code lang="bash">{`pip install trace-ai-python[langchain]`}</Code>
-          <Code lang="python">{`from traceai import Tracer
-from traceai.langchain import TraceAICallbackHandler
+          <Code lang="bash">{`pip install cernova[langchain]`}</Code>
+          <Code lang="python">{`from cernova import Tracer
+from cernova.langchain import CernovaCallbackHandler
 from langchain_anthropic import ChatAnthropic
 
 tracer  = Tracer(api_key="trace_...")
-handler = TraceAICallbackHandler(tracer)
+handler = CernovaCallbackHandler(tracer)
 
 # Attach to any LangChain LLM — works with Anthropic, OpenAI, Gemini, etc.
 llm = ChatAnthropic(model="claude-haiku-4-5-20251001", callbacks=[handler])
@@ -162,13 +162,13 @@ llm.invoke([{"role": "user", "content": "Hello!"}])
       <H2>Installation</H2>
       {lang === 'ts' ? (
         <>
-          <Code lang="bash">npm install @trace-ai/sdk</Code>
+          <Code lang="bash">npm install @cernova/sdk</Code>
           <P>No background processes, no native dependencies. Works in Node.js 18+ and any runtime with the Fetch API.</P>
         </>
       ) : (
         <>
-          <Code lang="bash">{`pip install trace-ai-python              # core only
-pip install trace-ai-python[langchain]   # + LangChain callback handler`}</Code>
+          <Code lang="bash">{`pip install cernova              # core only
+pip install cernova[langchain]   # + LangChain callback handler`}</Code>
           <P>No background processes. Works in Python 3.9+. The LangChain extra adds langchain-core — no other dependencies.</P>
         </>
       )}
@@ -200,7 +200,7 @@ function SectionSDKTS() {
 })`}</Code>
       <Table rows={[
         { f: 'apiKey', t: 'string',  d: 'Your project API key. Required.' },
-        { f: 'apiUrl', t: 'string?', d: 'Custom ingest URL. Defaults to trace-ai servers.' },
+        { f: 'apiUrl', t: 'string?', d: 'Custom ingest URL. Defaults to cernova servers.' },
         { f: 'runId',  t: 'string?', d: 'Override the auto-generated run ID for this tracer.' },
       ]} />
 
@@ -263,7 +263,7 @@ for await (const event of stream) {
       <H2>Naming steps</H2>
       <P>Add <code className="text-violet-400 font-mono">_trace: {'{ stepName: \'...\' }'}</code> to give a step a human-readable name. Without it, steps are auto-named from the first 4 words of the system prompt.</P>
       <Callout type="tip">
-        <strong className="text-gray-300">Keep system prompts as static templates.</strong> Dynamic content (user input, runtime values) should live in the messages array, not the system prompt. trace.ai uses the system prompt to build a stable semantic fingerprint — dynamic system prompts create duplicate profiles.
+        <strong className="text-gray-300">Keep system prompts as static templates.</strong> Dynamic content (user input, runtime values) should live in the messages array, not the system prompt. Cernova uses the system prompt to build a stable semantic fingerprint — dynamic system prompts create duplicate profiles.
       </Callout>
       <Code>{`// ✓ Good — static system prompt, dynamic user message
 await run.messages.create({
@@ -318,7 +318,7 @@ function SectionSDKPy() {
     <>
       <H2>Tracer(api_key, api_url)</H2>
       <P>The entry point. Create one instance per application.</P>
-      <Code lang="python">{`from traceai import Tracer
+      <Code lang="python">{`from cernova import Tracer
 
 tracer = Tracer(
     api_key = "trace_...",                 # required
@@ -326,15 +326,15 @@ tracer = Tracer(
 )`}</Code>
       <Table rows={[
         { f: 'api_key', t: 'str',   d: 'Your project API key. Required.' },
-        { f: 'api_url', t: 'str',   d: 'Custom ingest URL. Defaults to trace-ai servers.' },
+        { f: 'api_url', t: 'str',   d: 'Custom ingest URL. Defaults to cernova servers.' },
       ]} />
 
-      <H2>TraceAICallbackHandler</H2>
+      <H2>CernovaCallbackHandler</H2>
       <P>LangChain callback handler — attach to any LangChain LLM or chain. Works with Anthropic, OpenAI, Gemini, Cohere, and every other LangChain-supported provider.</P>
-      <Code lang="python">{`from traceai.langchain import TraceAICallbackHandler
+      <Code lang="python">{`from cernova.langchain import CernovaCallbackHandler
 from langchain_anthropic import ChatAnthropic
 
-handler = TraceAICallbackHandler(tracer)
+handler = CernovaCallbackHandler(tracer)
 
 # Option 1 — attach at LLM level (traces all calls on this LLM)
 llm = ChatAnthropic(model="claude-haiku-4-5-20251001", callbacks=[handler])
@@ -349,7 +349,7 @@ llm.invoke([...], config={"callbacks": [handler]})`}</Code>
     config={"metadata": {"step_name": "summarize"}},
 )`}</Code>
       <Callout type="tip">
-        <strong className="text-gray-300">Keep system prompts as static templates.</strong> trace.ai uses the system prompt to build a stable semantic fingerprint. Dynamic system prompts create a new step profile on every call. Put user-specific data in the human message, not the system prompt.
+        <strong className="text-gray-300">Keep system prompts as static templates.</strong> Cernova uses the system prompt to build a stable semantic fingerprint. Dynamic system prompts create a new step profile on every call. Put user-specific data in the human message, not the system prompt.
       </Callout>
 
       <H2>Multi-step pipelines</H2>
@@ -456,7 +456,7 @@ function SectionDetection() {
       </Callout>
 
       <H2>L5 — statistical detection</H2>
-      <P>Once a step has 20+ calls, trace.ai builds a per-step baseline using IQR statistics in log space. Every metric (latency, tokens, cost) is treated as log-normal — the right model for LLM data, which is always positive and right-skewed. Detection uses the Tukey fence:</P>
+      <P>Once a step has 20+ calls, Cernova builds a per-step baseline using IQR statistics in log space. Every metric (latency, tokens, cost) is treated as log-normal — the right model for LLM data, which is always positive and right-skewed. Detection uses the Tukey fence:</P>
       <div className="border border-white/8 bg-black px-5 py-4 mb-5 font-mono text-sm text-gray-300 leading-7">
         <div>upper fence = log(Q3) + k × log-IQR</div>
         <div>lower fence = log(Q1) − k × log-IQR</div>
@@ -485,7 +485,7 @@ function SectionDetection() {
       <P>Trend detection requires at least 30 calls per step (20 baseline + 10 recent). It catches slow latency creep, cost drift, and throughput degradation that individual call scores would miss.</P>
 
       <H2>AI run analysis</H2>
-      <P>Open any run and click <strong className="text-gray-300">✦ Analyze Run</strong>. trace.ai sends the full run context — every step, every anomaly score, every condition code — to claude-sonnet-4-6 and returns a structured report.</P>
+      <P>Open any run and click <strong className="text-gray-300">✦ Analyze Run</strong>. Cernova sends the full run context — every step, every anomaly score, every condition code — to claude-sonnet-4-6 and returns a structured report.</P>
       <div className="border border-white/8 border-l-2 border-l-violet-600 bg-black px-5 py-4 mb-5">
         <div className="font-mono text-[10px] text-violet-500 uppercase tracking-widest mb-3">Example output</div>
         <div className="space-y-3 font-mono text-[11px] text-gray-600 leading-5">
@@ -512,7 +512,7 @@ function SectionIntegrations() {
       <P>Both integrations are configured per-project in <strong className="text-gray-300">Settings</strong> — no code changes needed.</P>
 
       <H2>Slack</H2>
-      <P>Paste a Slack <a href="https://api.slack.com/messaging/webhooks" className="text-violet-400 hover:text-violet-300 underline underline-offset-4" target="_blank" rel="noreferrer">Incoming Webhook URL</a> into project settings. trace.ai posts alerts when:</P>
+      <P>Paste a Slack <a href="https://api.slack.com/messaging/webhooks" className="text-violet-400 hover:text-violet-300 underline underline-offset-4" target="_blank" rel="noreferrer">Incoming Webhook URL</a> into project settings. Cernova posts alerts when:</P>
       <Rows items={[
         { key: 'Step error',       value: 'Any call where status_success=false fires immediately with step name, model, error message, and run ID.' },
         { key: 'Error rate spike', value: 'If more than N% of the last M calls fail, a rate alert fires. Both thresholds are configurable (default: 25% over 20 calls). 5 min cooldown.' },
@@ -524,7 +524,7 @@ function SectionIntegrations() {
       </Callout>
 
       <H2>Sentry</H2>
-      <P>Add your Sentry project DSN in Settings. trace.ai sends two types of data, isolated from your own backend&apos;s Sentry client:</P>
+      <P>Add your Sentry project DSN in Settings. Cernova sends two types of data, isolated from your own backend&apos;s Sentry client:</P>
       <Rows items={[
         { key: 'Performance transactions', value: 'Every LLM call becomes a Sentry transaction named after its step. Latency, tokens, cost, and anomaly score appear as measurements. All steps in the same run share a trace_id so Sentry\'s distributed trace view reconstructs your full pipeline as a waterfall.' },
         { key: 'Anomaly events',           value: 'When a call crosses the anomaly threshold, a structured error event fires into your Sentry issues feed. Repeated failures on the same step fingerprint into one issue rather than spamming.' },
@@ -571,7 +571,7 @@ export default function DocsPage() {
         <div className="max-w-6xl mx-auto px-6 h-12 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 font-sans font-black text-sm text-white">
             <img src="/logo.svg" alt="" className="w-5 h-5" />
-            trace.ai
+            Cernova
           </Link>
           <div className="flex items-center gap-6">
             <span className="font-mono text-[11px] text-violet-500">docs</span>

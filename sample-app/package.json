@@ -1,5 +1,5 @@
 {
-  "name": "trace-ai-sample",
+  "name": "cernova-sample",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
-    "@trace-ai/sdk": "file:../sdk",
+    "@cernova/sdk": "file:../sdk",
     "dotenv": "^17.4.2"
   },
   "devDependencies": {

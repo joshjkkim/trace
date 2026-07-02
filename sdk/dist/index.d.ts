@@ -6,7 +6,7 @@ interface TraceOptions {
 interface TraceConfig {
     apiKey: string;
     runId?: string;
-    /** Override the ingest endpoint. Defaults to trace-ai's servers. For local dev only. */
+    /** Override the ingest endpoint. Defaults to cernova's servers. For local dev only. */
     apiUrl?: string;
 }
 interface TracePayload {
@@ -68,6 +68,47 @@ interface TracedAnthropic {
     run(): TracedRun;
 }
 
+interface OpenAIMessage {
+    role: string;
+    content: string | null;
+}
+interface OpenAIChatParams {
+    model: string;
+    messages: OpenAIMessage[];
+    [key: string]: unknown;
+    _trace?: {
+        stepName?: string;
+    };
+}
+interface OpenAIChatResponse {
+    id: string;
+    model: string;
+    choices: Array<{
+        message: OpenAIMessage;
+        finish_reason: string;
+    }>;
+    usage?: {
+        prompt_tokens: number;
+        completion_tokens: number;
+        total_tokens: number;
+    };
+}
+interface OpenAIClientLike {
+    chat: {
+        completions: {
+            create(params: Omit<OpenAIChatParams, '_trace'>, options?: unknown): Promise<OpenAIChatResponse>;
+        };
+    };
+}
+interface TracedOpenAIChat {
+    completions: {
+        create(params: OpenAIChatParams): Promise<OpenAIChatResponse>;
+    };
+}
+interface TracedOpenAI {
+    chat: TracedOpenAIChat;
+}
+
 declare class Tracer {
     private readonly apiUrl;
     private readonly apiKey;
@@ -75,8 +116,9 @@ declare class Tracer {
     constructor(config: TraceConfig);
     ingest(payload: TracePayload): Promise<string | null>;
     wrapAnthropic(client: AnthropicClientLike): TracedAnthropic;
+    wrapOpenAI(client: OpenAIClientLike): TracedOpenAI;
 }
 
 declare function getCost(model: string, inputTokens: number, outputTokens: number): number;
 
-export { type AnthropicClientLike, type MessageStreamLike, type TraceConfig, type TraceOptions, type TracePayload, type TracedAnthropic, type TracedMessageParams, TracedRun, type TracedStreamParams, Tracer, getCost };
+export { type AnthropicClientLike, type MessageStreamLike, type OpenAIClientLike, type TraceConfig, type TraceOptions, type TracePayload, type TracedAnthropic, type TracedMessageParams, type TracedOpenAI, TracedRun, type TracedStreamParams, Tracer, getCost };

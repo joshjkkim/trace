@@ -15,6 +15,19 @@ const PRICING: Record<string, ModelPricing> = {
   'claude-3-5-sonnet-20241022':   { inputPer1M: 3.00,   outputPer1M: 15.00,  contextWindow: 200_000 },
   'claude-3-5-haiku-20241022':    { inputPer1M: 0.80,   outputPer1M: 4.00,   contextWindow: 200_000 },
   'claude-3-opus-20240229':       { inputPer1M: 15.00,  outputPer1M: 75.00,  contextWindow: 200_000 },
+
+  // OpenAI
+  'gpt-4o':                       { inputPer1M: 2.50,   outputPer1M: 10.00,  contextWindow: 128_000 },
+  'gpt-4o-2024-11-20':            { inputPer1M: 2.50,   outputPer1M: 10.00,  contextWindow: 128_000 },
+  'gpt-4o-mini':                  { inputPer1M: 0.15,   outputPer1M: 0.60,   contextWindow: 128_000 },
+  'gpt-4o-mini-2024-07-18':       { inputPer1M: 0.15,   outputPer1M: 0.60,   contextWindow: 128_000 },
+  'gpt-4-turbo':                  { inputPer1M: 10.00,  outputPer1M: 30.00,  contextWindow: 128_000 },
+  'gpt-4-turbo-2024-04-09':       { inputPer1M: 10.00,  outputPer1M: 30.00,  contextWindow: 128_000 },
+  'gpt-4':                        { inputPer1M: 30.00,  outputPer1M: 60.00,  contextWindow: 8_192   },
+  'gpt-3.5-turbo':                { inputPer1M: 0.50,   outputPer1M: 1.50,   contextWindow: 16_385  },
+  'o1':                           { inputPer1M: 15.00,  outputPer1M: 60.00,  contextWindow: 200_000 },
+  'o1-mini':                      { inputPer1M: 1.10,   outputPer1M: 4.40,   contextWindow: 128_000 },
+  'o3-mini':                      { inputPer1M: 1.10,   outputPer1M: 4.40,   contextWindow: 200_000 },
 };
 
 export function getCost(model: string, inputTokens: number, outputTokens: number): number {

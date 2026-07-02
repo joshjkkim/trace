@@ -11,7 +11,7 @@
 
 import fs from 'node:fs';
 import { config as loadEnv } from 'dotenv';
-import { getCost } from '@trace-ai/sdk';
+import { getCost } from '@cernova/sdk';
 
 loadEnv({ path: '.env.local' });
 loadEnv();
@@ -21,7 +21,7 @@ const FILE_ONLY = args.includes('--file-only');
 const runsFlag = args.indexOf('--runs');
 const RUNS = runsFlag !== -1 ? parseInt(args[runsFlag + 1], 10) : 30;
 const INGEST_URL = (process.env.INGEST_URL ?? 'http://localhost:8000').replace(/\/$/, '');
-const TRACE_API_KEY = process.env.TRACE_API_KEY ?? 'seed-key';
+const CERNOVA_API_KEY = process.env.CERNOVA_API_KEY ?? 'seed-key';
 const OUT_FILE = 'payloads.json';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -160,7 +160,7 @@ async function main() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${TRACE_API_KEY}`,
+        'Authorization': `Bearer ${CERNOVA_API_KEY}`,
       },
       body: JSON.stringify(payload),
     });

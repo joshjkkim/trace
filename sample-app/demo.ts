@@ -11,8 +11,8 @@
 import { config as loadEnv } from 'dotenv';
 import Anthropic from '@anthropic-ai/sdk';
 import type { Message } from '@anthropic-ai/sdk/resources/messages';
-import { Tracer, getCost } from '@trace-ai/sdk';
-import type { TracedMessageParams } from '@trace-ai/sdk';
+import { Tracer, getCost } from '@cernova/sdk';
+import type { TracedMessageParams } from '@cernova/sdk';
 
 loadEnv({ path: '.env.local' });
 loadEnv();

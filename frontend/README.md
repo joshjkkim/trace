@@ -1,4 +1,4 @@
-# trace.ai — Dashboard
+# Cernova — Dashboard
 
 Next.js app that subscribes to Supabase Realtime and displays new `CALLS` rows as they arrive.
 

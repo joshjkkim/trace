@@ -1,29 +1,29 @@
-# traceai
+# cernova
 
-Python SDK for [trace.ai](https://use-trace-ai.vercel.app) — observability for LLM workflows.
+Python SDK for [Cernova](https://cernova.dev) — observability for LLM workflows.
 
 Automatically captures tokens, latency, cost, and anomaly scores for every LLM call.
 
 ## Installation
 
 ```bash
-pip install trace-ai-python              # core — manual ingest()
-pip install trace-ai-python[langchain]   # + LangChain callback handler (Anthropic, OpenAI, etc.)
+pip install cernova              # core — manual ingest()
+pip install cernova[langchain]   # + LangChain callback handler (Anthropic, OpenAI, etc.)
 ```
 
 ## LangChain (recommended)
 
-Attach `TraceAICallbackHandler` to any LangChain LLM — every call is traced automatically:
+Attach `CernovaCallbackHandler` to any LangChain LLM — every call is traced automatically:
 
 ```python
-from traceai import Tracer
-from traceai.langchain import TraceAICallbackHandler
+from cernova import Tracer
+from cernova.langchain import CernovaCallbackHandler
 from langchain_anthropic import ChatAnthropic
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
 tracer  = Tracer(api_key="trace_...")
-handler = TraceAICallbackHandler(tracer)
+handler = CernovaCallbackHandler(tracer)
 
 llm   = ChatAnthropic(model="claude-haiku-4-5-20251001", callbacks=[handler])
 chain = ChatPromptTemplate.from_template("Summarize: {text}") | llm | StrOutputParser()
@@ -105,22 +105,22 @@ tracer.ingest(
 
 ```python
 import os
-from traceai import Tracer
+from cernova import Tracer
 
 tracer = Tracer(
-    api_key = os.environ["TRACE_API_KEY"],
-    api_url = os.environ.get("TRACE_API_URL", "https://trace-production-940c.up.railway.app"),
+    api_key = os.environ["CERNOVA_API_KEY"],
+    api_url = os.environ.get("CERNOVA_API_URL", "https://trace-production-940c.up.railway.app"),
 )
 ```
 
 For local dev, add to `.env`:
 ```
-TRACE_API_KEY=trace_...
-TRACE_API_URL=http://localhost:8000
+CERNOVA_API_KEY=trace_...
+CERNOVA_API_URL=http://localhost:8000
 ```
 
 ## Links
 
-- [Dashboard](https://use-trace-ai.vercel.app)
-- [Documentation](https://use-trace-ai.vercel.app/docs)
+- [Dashboard](https://cernova.dev)
+- [Documentation](https://cernova.dev/docs)
 - [TypeScript SDK](../sdk/)

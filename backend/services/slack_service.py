@@ -199,10 +199,10 @@ def send_test_alert(webhook_url: str, project_name: str) -> bool:
         "type": "section",
         "text": {
             "type": "mrkdwn",
-            "text": f"✅ *trace.ai webhook connected*\nAlerts for *{project_name}* will appear here.",
+            "text": f"✅ *Cernova webhook connected*\nAlerts for *{project_name}* will appear here.",
         },
     }]
     return _post(webhook_url, {
-        "text": f"✅ trace.ai connected to {project_name}",
+        "text": f"✅ Cernova connected to {project_name}",
         "blocks": blocks,
     })

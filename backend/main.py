@@ -36,7 +36,7 @@ app.include_router(analyze.router)
 
 @app.get("/debug-sentry")
 def debug_sentry() -> dict:
-    raise ValueError("Sentry test error from trace.ai backend")
+    raise ValueError("Sentry test error from Cernova backend")
 
 @app.get("/health")
 def health() -> dict:

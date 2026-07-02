@@ -3,7 +3,7 @@
 Tests:
   1. Tracer.ingest() fires without error (fire-and-forget, expects a running backend)
   2. Cost calculation
-  3. TraceAICallbackHandler with a mock LLM (no real API call)
+  3. CernovaCallbackHandler with a mock LLM (no real API call)
 """
 
 import json
@@ -14,10 +14,10 @@ from uuid import UUID
 
 sys.path.insert(0, ".")
 
-from traceai import Tracer
-from traceai._cost import get_cost
-from traceai.langchain import (
-    TraceAICallbackHandler,
+from cernova import Tracer
+from cernova._cost import get_cost
+from cernova.langchain import (
+    CernovaCallbackHandler,
     _extract_model,
     _extract_tokens,
     _serialize_messages,
@@ -64,7 +64,7 @@ print("✓ message serialization")
 # ── 5. Callback handler — ingest payload shape ────────────────────────────────
 
 tracer = Tracer(api_key="trace_test", api_url="http://localhost:9999")
-handler = TraceAICallbackHandler(tracer)
+handler = CernovaCallbackHandler(tracer)
 
 ingested = []
 tracer.ingest = lambda **kw: ingested.append(kw)  # capture instead of posting

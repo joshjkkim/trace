@@ -1,4 +1,4 @@
-# trace.ai — Backend
+# Cernova — Backend
 
 FastAPI service that receives trace payloads from the SDK and writes them to Supabase.
 

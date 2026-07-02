@@ -1,4 +1,4 @@
-"""traceai — LLM observability for Python."""
+"""cernova — LLM observability for Python."""
 
 from .tracer import RunContext, Tracer
 

@@ -11,8 +11,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'http';
 import Anthropic from '@anthropic-ai/sdk';
 import type { Message } from '@anthropic-ai/sdk/resources/messages';
-import { Tracer } from '@trace-ai/sdk';
-import type { TracedMessageParams } from '@trace-ai/sdk';
+import { Tracer } from '@cernova/sdk';
+import type { TracedMessageParams } from '@cernova/sdk';
 import { config as loadEnv } from 'dotenv';
 
 loadEnv({ path: '.env.local' });
@@ -20,7 +20,7 @@ loadEnv();
 
 const PORT       = 3001;
 const INGEST_URL = process.env.INGEST_URL;
-const API_KEY    = process.env.TRACE_API_KEY ?? '';
+const API_KEY    = process.env.CERNOVA_API_KEY ?? '';
 
 if (!process.env.ANTHROPIC_API_KEY) {
   console.error('Missing ANTHROPIC_API_KEY — set it in .env.local');
@@ -237,7 +237,7 @@ async function runWorkflow(message: string, history: HistoryItem[]) {
   if (message.trim() === '!cascade') {
     const runId = await triggerCascade();
     return {
-      reply: `Cascade failure injected (3 steps):\n  parse-request → 75pts warning (malformed JSON)\n  enrich-context → 20pts warning (stall)\n  generate-response → 200pts critical (hard crash)\nOpen the run in trace.ai and click Analyze to see if it finds the root cause.\nRun: ${runId}`,
+      reply: `Cascade failure injected (3 steps):\n  parse-request → 75pts warning (malformed JSON)\n  enrich-context → 20pts warning (stall)\n  generate-response → 200pts critical (hard crash)\nOpen the run in Cernova and click Analyze to see if it finds the root cause.\nRun: ${runId}`,
       intent: 'technical', context: '', runId,
     };
   }
@@ -515,7 +515,7 @@ const HTML = /* html */`<!DOCTYPE html>
 <div class="header">
   <div class="header-dot"></div>
   <span class="header-title">Acme AI Support</span>
-  <span class="header-sub">Powered by trace.ai</span>
+  <span class="header-sub">Powered by Cernova</span>
 </div>
 
 <div class="messages" id="messages">

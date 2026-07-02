@@ -1,6 +1,6 @@
 {
-  "name": "@trace-ai/sdk",
-  "version": "0.1.1",
+  "name": "@cernova/sdk",
+  "version": "0.1.4",
   "description": "Tracing SDK for AI workflows — wraps LLM clients to capture tokens, latency, and cost",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
@@ -12,7 +12,7 @@
       "require": "./dist/index.cjs"
     }
   },
-  "files": ["dist"],
+  "files": ["dist", "README.md"],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Python demo chatbot — mirrors chatbot.ts but uses LangChain + traceai.
+Python demo chatbot — mirrors chatbot.ts but uses LangChain + cernova.
 
 Usage:
     pip install langchain-anthropic
-    ANTHROPIC_API_KEY=... TRACE_API_KEY=trace_... python sample-app/chatbot.py
+    ANTHROPIC_API_KEY=... CERNOVA_API_KEY=trace_... python sample-app/chatbot.py
 
 Then open http://localhost:3002
 
@@ -27,8 +27,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "python-sdk"))
 
-from traceai import Tracer
-from traceai.langchain import TraceAICallbackHandler
+from cernova import Tracer
+from cernova.langchain import CernovaCallbackHandler
 
 try:
     from langchain_anthropic import ChatAnthropic
@@ -45,8 +45,8 @@ if not os.environ.get("ANTHROPIC_API_KEY"):
     print("Missing ANTHROPIC_API_KEY — set it in your environment")
     sys.exit(1)
 
-tracer  = Tracer(api_key=os.environ.get("TRACE_API_KEY", ""))
-handler = TraceAICallbackHandler(tracer)
+tracer  = Tracer(api_key=os.environ.get("CERNOVA_API_KEY", ""))
+handler = CernovaCallbackHandler(tracer)
 llm     = ChatAnthropic(model=MODEL, api_key=os.environ["ANTHROPIC_API_KEY"])
 
 # ── Anomaly trigger helpers (same payloads as chatbot.ts) ─────────────────────
@@ -144,7 +144,7 @@ def _workflow(inputs: dict, config: dict) -> dict:
     """classify-intent → extract-context → generate-reply.
 
     Each llm.invoke() inherits the outer RunnableLambda's run_id as
-    parent_run_id, grouping all three steps under one trace.ai run.
+    parent_run_id, grouping all three steps under one Cernova run.
     """
     message = inputs["message"]
     history = inputs.get("history", [])
@@ -206,7 +206,7 @@ def run_workflow(message: str, history: list) -> dict:
         return {"reply": f"L4 stall: 9.5s latency, only 3 output tokens — stall/hang signature.\nCodes: 4007(20) + 4009(15) = 35pts → warning (below threshold).\nRun: {run_id}", "intent": "technical", "runId": run_id}
     if msg == "!cascade":
         run_id = trigger_cascade()
-        return {"reply": f"Cascade failure injected (3 steps):\n  parse-request → 75pts warning (malformed JSON)\n  enrich-context → 20pts warning (stall)\n  generate-response → 200pts critical (hard crash)\nOpen the run in trace.ai and click Analyze to see if it finds the root cause.\nRun: {run_id}", "intent": "technical", "runId": run_id}
+        return {"reply": f"Cascade failure injected (3 steps):\n  parse-request → 75pts warning (malformed JSON)\n  enrich-context → 20pts warning (stall)\n  generate-response → 200pts critical (hard crash)\nOpen the run in Cernova and click Analyze to see if it finds the root cause.\nRun: {run_id}", "intent": "technical", "runId": run_id}
     if msg == "!spike":
         runs = [trigger_l1_failure(f"spike-error-{i+1}") for i in range(6)]
         return {"reply": f"Triggered 6 error calls to spike the error rate. Check Slack.\nFirst run: {runs[0]}", "intent": "technical", "runId": runs[0]}
@@ -350,7 +350,7 @@ HTML = """<!DOCTYPE html>
   <div class="header-dot"></div>
   <span class="header-title">Acme AI Support</span>
   <span class="py-badge">Python / LangChain</span>
-  <span class="header-sub">Powered by trace.ai</span>
+  <span class="header-sub">Powered by Cernova</span>
 </div>
 
 <div class="messages" id="messages">

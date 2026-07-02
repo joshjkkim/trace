@@ -1,12 +1,12 @@
-"""LangChain callback handler for trace.ai.
+"""LangChain callback handler for Cernova.
 
 Attach to any LangChain LLM or chain — every LLM call is automatically traced:
 
-    from traceai import Tracer
-    from traceai.langchain import TraceAICallbackHandler
+    from cernova import Tracer
+    from cernova.langchain import CernovaCallbackHandler
 
     tracer  = Tracer(api_key="trace_...")
-    handler = TraceAICallbackHandler(tracer)
+    handler = CernovaCallbackHandler(tracer)
 
     llm   = ChatAnthropic(model="claude-haiku-4-5-20251001", callbacks=[handler])
     chain = prompt | llm | StrOutputParser()
@@ -15,7 +15,7 @@ Attach to any LangChain LLM or chain — every LLM call is automatically traced:
 Run grouping
 ------------
 LangChain passes a `run_id` (UUID) to each LLM call and a `parent_run_id` for
-the chain that contains it. We use the immediate parent as the trace.ai run_id so
+the chain that contains it. We use the immediate parent as the Cernova run_id so
 all LLM calls inside a single chain.invoke() share one run in the dashboard.
 
 Step naming
@@ -45,7 +45,7 @@ try:
     from langchain_core.outputs import LLMResult
 except ImportError as e:
     raise ImportError(
-        "langchain-core is required: pip install traceai[langchain]"
+        "langchain-core is required: pip install cernova[langchain]"
     ) from e
 
 from ._cost import get_cost
@@ -111,7 +111,7 @@ def _extract_output(response: LLMResult) -> str | None:
         return None
 
 
-class TraceAICallbackHandler(BaseCallbackHandler):
+class CernovaCallbackHandler(BaseCallbackHandler):
     """Attach to any LangChain LLM or chain to automatically trace every call."""
 
     def __init__(self, tracer: Tracer) -> None:
@@ -133,9 +133,9 @@ class TraceAICallbackHandler(BaseCallbackHandler):
     # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _trace_run_id(self, lc_run_id: UUID, parent_run_id: UUID | None) -> str:
-        """Map LangChain's run hierarchy to a trace.ai run_id.
+        """Map LangChain's run hierarchy to a Cernova run_id.
 
-        The immediate parent (chain's run_id) becomes the trace.ai run_id so
+        The immediate parent (chain's run_id) becomes the Cernova run_id so
         all LLM calls inside one chain.invoke() share a single run.
         If there's no parent (bare LLM call), the LLM's own run_id is used.
         """
