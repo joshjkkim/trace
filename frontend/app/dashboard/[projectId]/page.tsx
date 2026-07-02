@@ -1548,7 +1548,7 @@ function SettingsTab({ project }: { project: Project }) {
 
       <SettingSection
         title="Sentry integration"
-        description="When trace.ai detects a critical anomaly, it sends a structured event to your Sentry project — grouped by step name, tagged with model and layer."
+        description="When Cernova detects a critical anomaly, it sends a structured event to your Sentry project — grouped by step name, tagged with model and layer."
       >
         <div className="space-y-4">
           <Field label="Sentry DSN">

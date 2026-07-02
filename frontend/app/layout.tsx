@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "trace.ai",
+  title: "Cernova",
   description: "Observability for AI workflows",
 };
 

@@ -109,7 +109,7 @@ export function wrapAnthropic(client: AnthropicClientLike, tracer: Tracer): Trac
         const start = Date.now();
 
         if (!client.messages.stream) {
-          throw new Error('[trace-ai] This Anthropic client does not support streaming.');
+          throw new Error('[cernova] This Anthropic client does not support streaming.');
         }
         const messageStream = client.messages.stream(cleanParams as MessageCreateParamsNonStreaming);
 

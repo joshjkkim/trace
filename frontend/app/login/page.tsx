@@ -20,7 +20,7 @@ export default function LoginPage() {
         <div className="mb-8 text-center">
           <a href="/" className="inline-flex items-center gap-2 font-sans font-black text-lg text-white">
             <img src="/logo.svg" alt="" className="w-5 h-5" />
-            trace.ai
+            Cernova
           </a>
           <p className="font-mono text-[11px] text-gray-600 mt-2">sign in to your account</p>
         </div>

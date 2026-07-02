@@ -249,7 +249,7 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-6 h-12 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 font-sans font-black text-sm text-white">
             <img src="/logo.svg" alt="" className="w-5 h-5" />
-            trace.ai
+            Cernova
           </Link>
           <div className="flex items-center gap-6">
             <a href="#detection" className="text-[11px] font-mono text-gray-600 hover:text-white transition-colors hidden sm:block">detection</a>
@@ -279,7 +279,7 @@ export default function LandingPage() {
               LLMs don&apos;t throw exceptions. They
               hallucinate, return broken JSON, spike
               costs, and drift — all while your logs
-              show green. trace.ai catches it.
+              show green. Cernova catches it.
             </p>
             <div className="flex items-center gap-4">
               <Link href="/login" className="font-mono text-sm font-bold px-6 py-3 bg-violet-600 hover:bg-violet-500 text-white transition-colors">
@@ -389,7 +389,7 @@ export default function LandingPage() {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
-              { n: '01', title: 'Install', code: 'npm install @trace-ai/sdk' },
+              { n: '01', title: 'Install', code: 'npm install @cernova/sdk' },
               { n: '02', title: 'Wrap your client', code: `const tracer = new Tracer({ apiKey })
 const anthropic = tracer.wrapAnthropic(
   new Anthropic()
@@ -440,7 +440,7 @@ const anthropic = tracer.wrapAnthropic(
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-2 font-sans font-black text-sm text-white">
             <img src="/logo.svg" alt="" className="w-5 h-5" />
-            trace.ai
+            Cernova
           </Link>
           <div className="flex items-center gap-8">
             <Link href="/docs" className="font-mono text-[11px] text-gray-700 hover:text-white transition-colors">docs</Link>

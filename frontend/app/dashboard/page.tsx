@@ -74,8 +74,8 @@ export default function Dashboard() {
         <div className="max-w-5xl mx-auto px-6 h-12 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <a href="/" className="flex items-center gap-2 font-sans font-black text-sm text-white">
-              <img src="/logo.svg" alt="trace.ai" className="w-5 h-5" />
-              trace.ai
+              <img src="/logo.svg" alt="Cernova" className="w-5 h-5" />
+              Cernova
             </a>
             <span className="text-white/10">|</span>
             <span className="font-mono text-[11px] text-gray-600">{email}</span>

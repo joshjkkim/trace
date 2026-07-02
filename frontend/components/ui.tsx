@@ -3,7 +3,7 @@
 import { useState } from 'react'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// trace.ai shared design system
+// Cernova shared design system
 //
 // Tokens:
 //   background  — bg-black (#000)

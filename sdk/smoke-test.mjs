@@ -1,4 +1,4 @@
-// Self-contained smoke test for @trace-ai/sdk.
+// Self-contained smoke test for /sdk.
 // Verifies the built SDK: wraps a (fake) Anthropic client, makes a call,
 // and confirms the trace payload is POSTed correctly — no API key, no DB needed.
 //

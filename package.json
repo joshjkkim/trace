@@ -1,5 +1,5 @@
 {
-  "name": "trace-ai",
+  "name": "cernova",
   "private": true,
   "scripts": {
     "dev": "concurrently --names sdk,backend,frontend --prefix-colors cyan,yellow,magenta \"npm run sdk:watch\" \"npm run backend\" \"npm run frontend\"",

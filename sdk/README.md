@@ -1,20 +1,20 @@
-# @trace-ai/sdk
+# @cernova/sdk
 
-Observability for AI workflows. Wraps Anthropic's `messages.create` and `messages.stream` to automatically capture tokens, latency, cost, and anomalies — then sends traces to your [trace.ai](https://trace.ai) dashboard.
+Observability for AI workflows. Wraps Anthropic's `messages.create` and `messages.stream` to automatically capture tokens, latency, cost, and anomalies — then sends traces to your [Cernova](https://cernova.dev) dashboard.
 
 ## Install
 
 ```bash
-npm install @trace-ai/sdk @anthropic-ai/sdk
+npm install @cernova/sdk @anthropic-ai/sdk
 ```
 
 ## Quick start
 
 ```typescript
 import Anthropic from '@anthropic-ai/sdk';
-import { Tracer } from '@trace-ai/sdk';
+import { Tracer } from '@cernova/sdk';
 
-const tracer = new Tracer({ apiKey: process.env.TRACE_API_KEY! });
+const tracer = new Tracer({ apiKey: process.env.CERNOVA_API_KEY! });
 const anthropic = tracer.wrapAnthropic(new Anthropic());
 
 const response = await anthropic.messages.create({
@@ -76,8 +76,8 @@ for await (const event of stream) {
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `apiKey` | `string` | yes | Your trace.ai project API key |
-| `apiUrl` | `string` | | Override ingest URL — defaults to trace.ai's servers |
+| `apiKey` | `string` | yes | Your Cernova project API key |
+| `apiUrl` | `string` | | Override ingest URL — defaults to Cernova's servers |
 | `runId` | `string` | | Custom run ID — auto-generated UUID if omitted |
 
 ### `tracer.wrapAnthropic(client)`
@@ -118,4 +118,4 @@ The POST to `/ingest` never blocks your app. Network failures are logged to `con
 
 ## Dashboard
 
-View traces, anomaly scores, AI-powered run analysis, and cost breakdowns at [trace.ai](https://trace.ai).
+View traces, anomaly scores, AI-powered run analysis, and cost breakdowns at [cernova.dev](https://cernova.dev).

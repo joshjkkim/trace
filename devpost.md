@@ -4,11 +4,11 @@ We kept running into the same problem building AI features: something breaks in 
 
 ## What we built
 
-trace.ai wraps your Anthropic calls with one line of code and captures every step of your AI workflow — tokens, latency, cost, model, prompt, and output. A 4-layer anomaly detection engine scores each call in real time, fires Slack and Sentry alerts when something breaks, and an AI-powered analysis feature (built on Claude) traces cascade failures back to their root cause. Thresholds adapt automatically to each project's baseline using p95 statistics from recent call history.
+Cernova wraps your Anthropic calls with one line of code and captures every step of your AI workflow — tokens, latency, cost, model, prompt, and output. A 4-layer anomaly detection engine scores each call in real time, fires Slack and Sentry alerts when something breaks, and an AI-powered analysis feature (built on Claude) traces cascade failures back to their root cause. Thresholds adapt automatically to each project's baseline using p95 statistics from recent call history.
 
 ## How we built it
 
-- **SDK**: TypeScript package (`@trace-ai/sdk`) that wraps `messages.create` and `messages.stream`, fire-and-forget ingestion to avoid adding latency
+- **SDK**: TypeScript package (`/sdk`) that wraps `messages.create` and `messages.stream`, fire-and-forget ingestion to avoid adding latency
 - **Backend**: FastAPI on Railway with Supabase — anomaly scoring runs in a background thread on every ingest so it never blocks the response
 - **Anomaly engine**: 4 layers (hard failures → format checks → output fingerprinting → numeric/performance), each with static penalties that accumulate into a total score checked against a dynamic p95 threshold learned from the project's history
 - **Sentry integration**: every LLM step emits a Sentry Performance transaction using OpenTelemetry GenAI semantic conventions (`gen_ai.usage.input_tokens`, etc.) — all steps in a run share a `trace_id` derived from the `run_id` so Sentry reconstructs the full pipeline in its distributed tracing view. Anomaly events are sent separately with fingerprinting so repeated failures group into a single Sentry issue.

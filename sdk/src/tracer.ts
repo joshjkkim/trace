@@ -1,5 +1,6 @@
 import type { TraceConfig, TracePayload } from './types';
 import { wrapAnthropic, type TracedAnthropic, type AnthropicClientLike } from './wrappers/anthropic';
+import { wrapOpenAI, type TracedOpenAI, type OpenAIClientLike } from './wrappers/openai';
 
 function uuid(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -33,12 +34,16 @@ export class Tracer {
       .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
       .then((data: { trace_id: string }) => data.trace_id ?? null)
       .catch((err: unknown) => {
-        console.warn('[trace-ai] ingest failed:', err);
+        console.warn('[cernova] ingest failed:', err);
         return null;
       });
   }
 
   wrapAnthropic(client: AnthropicClientLike): TracedAnthropic {
     return wrapAnthropic(client, this);
+  }
+
+  wrapOpenAI(client: OpenAIClientLike): TracedOpenAI {
+    return wrapOpenAI(client, this);
   }
 }

@@ -1,4 +1,4 @@
-# trace.ai — Sample App
+# Cernova — Sample App
 
 End-to-end demo: runs a real 3-step Anthropic workflow, sends traces to the FastAPI backend, and you can watch them appear live in the dashboard.
 
